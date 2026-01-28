@@ -1,0 +1,753 @@
+# LS-DYNA Keyword Implementation Progress
+
+**Last Updated**: 2026-01-18
+**Total Implemented**: 510 keywords
+
+## Summary by Category
+
+| Category | Implemented | Status |
+|----------|-------------|--------|
+| AIRBAG | 10 | Active |
+| ALE | 10 | Active |
+| BOUNDARY | 19 | Active |
+| CESE | 11 | Active |
+| CHEMISTRY | 10 | Active |
+| CONSTRAINED | 20 | Active |
+| CONTACT | 25 | Active |
+| CONTROL | 35 | Active |
+| DAMPING | 11 | Active |
+| DATABASE | 32 | Active |
+| DEFINE | 24 | Active |
+| DEFORMABLE_TO_RIGID | 5 | Active |
+| DUALCESE | 9 | Active |
+| ELEMENT | 19 | Active |
+| EM | 11 | Active |
+| EOS | 8 | Active |
+| FREQUENCY_DOMAIN | 10 | Active |
+| HOURGLASS | 8 | Active |
+| ICFD | 12 | Active |
+| INCLUDE | 8 | Active |
+| INITIAL | 15 | Active |
+| INTEGRATION | 7 | Active |
+| INTERFACE | 9 | Active |
+| LOAD | 21 | Active |
+| MAT | 55 | Active |
+| NODE | 1 | Active |
+| PARAMETER | 7 | Active |
+| PART | 3 | Active |
+| PERTURBATION | 9 | Active |
+| RIGID_TO_DEFORMABLE | 1 | Active |
+| RIGIDWALL | 9 | Active |
+| SECTION | 16 | Active |
+| SENSOR | 11 | Active |
+| SET | 18 | Active |
+| STOCHASTIC | 9 | Active |
+
+---
+
+## Implemented Keywords (510)
+
+### AIRBAG (10)
+- [x] `*AIRBAG_ADIABATIC_GAS_MODEL`
+- [x] `*AIRBAG_HYBRID`
+- [x] `*AIRBAG_INTERACTION`
+- [x] `*AIRBAG_LINEAR_FLUID`
+- [x] `*AIRBAG_LOAD_CURVE`
+- [x] `*AIRBAG_PARTICLE`
+- [x] `*AIRBAG_REFERENCE_GEOMETRY`
+- [x] `*AIRBAG_SIMPLE_AIRBAG_MODEL`
+- [x] `*AIRBAG_SIMPLE_PRESSURE_VOLUME`
+- [x] `*AIRBAG_WANG_NEFSKE`
+
+### ALE (10)
+- [x] `*ALE_AMBIENT_HYDROSTATIC`
+- [x] `*ALE_COUPLING_NODAL_CONSTRAINT`
+- [x] `*ALE_ESSENTIAL_BOUNDARY`
+- [x] `*ALE_FAIL_SWITCH_MMG`
+- [x] `*ALE_FSI_SWITCH_MMG`
+- [x] `*ALE_MULTI-MATERIAL_GROUP`
+- [x] `*ALE_REFERENCE_SYSTEM_GROUP`
+- [x] `*ALE_REFERENCE_SYSTEM_NODE`
+- [x] `*ALE_SMOOTHING`
+- [x] `*ALE_STRUCTURED_MESH`
+- [x] `*ALE_STRUCTURED_MESH_CONTROL_POINTS`
+
+### BOUNDARY (19)
+- [x] `*BOUNDARY_ACOUSTIC_IMPEDANCE`
+- [x] `*BOUNDARY_AMBIENT_EOS`
+- [x] `*BOUNDARY_CONVECTION`
+- [x] `*BOUNDARY_CONVECTION_SET`
+- [x] `*BOUNDARY_CYCLIC`
+- [x] `*BOUNDARY_FLUX`
+- [x] `*BOUNDARY_FLUX_SET`
+- [x] `*BOUNDARY_FLUX_TRAJECTORY`
+- [x] `*BOUNDARY_NON_REFLECTING`
+- [x] `*BOUNDARY_PAP`
+- [x] `*BOUNDARY_PRESCRIBED_ACCELEROMETER`
+- [x] `*BOUNDARY_PRESCRIBED_MOTION_NODE`
+- [x] `*BOUNDARY_PRESCRIBED_MOTION_RIGID`
+- [x] `*BOUNDARY_PRESCRIBED_MOTION_SET`
+- [x] `*BOUNDARY_PRESCRIBED_MOTION_SET_BOX`
+- [x] `*BOUNDARY_RADIATION`
+- [x] `*BOUNDARY_RADIATION_SET`
+- [x] `*BOUNDARY_SLIDING_PLANE`
+- [x] `*BOUNDARY_SPC_NODE`
+- [x] `*BOUNDARY_SPC_SET`
+- [x] `*BOUNDARY_SPC_SET_BIRTH_DEATH`
+- [x] `*BOUNDARY_TEMPERATURE`
+- [x] `*BOUNDARY_THERMAL_NODE`
+- [x] `*BOUNDARY_THERMAL_SET`
+
+### CESE (11)
+- [x] `*CESE_BOUNDARY_NON_REFLECTIVE`
+- [x] `*CESE_BOUNDARY_PRESCRIBED`
+- [x] `*CESE_BOUNDARY_REFLECTIVE`
+- [x] `*CESE_CONTROL_MESH`
+- [x] `*CESE_CONTROL_OUTPUT`
+- [x] `*CESE_CONTROL_SOLVER`
+- [x] `*CESE_CONTROL_TIMESTEP`
+- [x] `*CESE_INITIAL`
+- [x] `*CESE_MAT`
+- [x] `*CESE_PART`
+
+### CHEMISTRY (10)
+- [x] `*CHEMISTRY_COMPOSITION`
+- [x] `*CHEMISTRY_CONTROL`
+- [x] `*CHEMISTRY_CONTROL_INFLATOR`
+- [x] `*CHEMISTRY_CONTROL_ZND`
+- [x] `*CHEMISTRY_DETONATION`
+- [x] `*CHEMISTRY_INFLATOR_PROPERTIES`
+- [x] `*CHEMISTRY_MODEL`
+- [x] `*CHEMISTRY_REACTION`
+- [x] `*CHEMISTRY_SPECIES`
+
+### CONSTRAINED (20)
+- [x] `*CONSTRAINED_BEAM_IN_SOLID`
+- [x] `*CONSTRAINED_EXTRA_NODES_NODE`
+- [x] `*CONSTRAINED_EXTRA_NODES_SET`
+- [x] `*CONSTRAINED_GENERALIZED_WELD_NODE`
+- [x] `*CONSTRAINED_GLOBAL`
+- [x] `*CONSTRAINED_INTERPOLATION`
+- [x] `*CONSTRAINED_JOINT_CYLINDRICAL`
+- [x] `*CONSTRAINED_JOINT_PLANAR`
+- [x] `*CONSTRAINED_JOINT_REVOLUTE`
+- [x] `*CONSTRAINED_JOINT_SPHERICAL`
+- [x] `*CONSTRAINED_JOINT_STIFFNESS`
+- [x] `*CONSTRAINED_JOINT_TRANSLATIONAL`
+- [x] `*CONSTRAINED_JOINT_UNIVERSAL`
+- [x] `*CONSTRAINED_LAGRANGE_IN_SOLID`
+- [x] `*CONSTRAINED_LINEAR`
+- [x] `*CONSTRAINED_NODAL_RIGID_BODY`
+- [x] `*CONSTRAINED_NODE_SET`
+- [x] `*CONSTRAINED_RIGID_BODIES`
+- [x] `*CONSTRAINED_RIGID_BODY_STOPPERS`
+- [x] `*CONSTRAINED_SHELL_TO_SOLID`
+- [x] `*CONSTRAINED_SPOTWELD`
+- [x] `*CONSTRAINED_TIE-BREAK`
+
+### CONTACT (25)
+- [x] `*CONTACT_2D_AUTOMATIC_SINGLE_SURFACE`
+- [x] `*CONTACT_AUTOMATIC_GENERAL`
+- [x] `*CONTACT_AUTOMATIC_NODES_TO_SURFACE`
+- [x] `*CONTACT_AUTOMATIC_SINGLE_SURFACE`
+- [x] `*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID`
+- [x] `*CONTACT_AUTOMATIC_SINGLE_SURFACE_MORTAR`
+- [x] `*CONTACT_AUTOMATIC_SURFACE_TO_SURFACE`
+- [x] `*CONTACT_AUTOMATIC_SURFACE_TO_SURFACE_MORTAR`
+- [x] `*CONTACT_AUTOMATIC_SURFACE_TO_SURFACE_TIEBREAK`
+- [x] `*CONTACT_DRAWBEAD`
+- [x] `*CONTACT_ENTITY`
+- [x] `*CONTACT_ERODING_NODES_TO_SURFACE`
+- [x] `*CONTACT_ERODING_SINGLE_SURFACE`
+- [x] `*CONTACT_ERODING_SURFACE_TO_SURFACE`
+- [x] `*CONTACT_FORCE_TRANSDUCER_PENALTY`
+- [x] `*CONTACT_FORMING_ONE_WAY_SURFACE_TO_SURFACE`
+- [x] `*CONTACT_GEBOD_SEGMENT`
+- [x] `*CONTACT_INTERIOR`
+- [x] `*CONTACT_NODES_TO_SURFACE`
+- [x] `*CONTACT_RIGID_BODY_ONE_WAY`
+- [x] `*CONTACT_SPOTWELD`
+- [x] `*CONTACT_SURFACE_TO_SURFACE`
+- [x] `*CONTACT_TIED_NODES_TO_SURFACE`
+- [x] `*CONTACT_TIED_SHELL_EDGE_TO_SURFACE`
+- [x] `*CONTACT_TIED_SURFACE_TO_SURFACE`
+
+### CONTROL (35)
+- [x] `*CONTROL_ACCURACY`
+- [x] `*CONTROL_ADAPTIVE`
+- [x] `*CONTROL_ALE`
+- [x] `*CONTROL_BULK_VISCOSITY`
+- [x] `*CONTROL_CONTACT`
+- [x] `*CONTROL_CPU`
+- [x] `*CONTROL_DYNAMIC_RELAXATION`
+- [x] `*CONTROL_ENERGY`
+- [x] `*CONTROL_FORMING_BESTFIT`
+- [x] `*CONTROL_FORMING_ONESTEP`
+- [x] `*CONTROL_HOURGLASS`
+- [x] `*CONTROL_IMPLICIT_AUTO`
+- [x] `*CONTROL_IMPLICIT_BUCKLE`
+- [x] `*CONTROL_IMPLICIT_DYNAMICS`
+- [x] `*CONTROL_IMPLICIT_EIGENVALUE`
+- [x] `*CONTROL_IMPLICIT_FORMING`
+- [x] `*CONTROL_IMPLICIT_GENERAL`
+- [x] `*CONTROL_IMPLICIT_MODAL_DYNAMIC`
+- [x] `*CONTROL_IMPLICIT_SOLUTION`
+- [x] `*CONTROL_IMPLICIT_SOLVER`
+- [x] `*CONTROL_IMPLICIT_STABILIZATION`
+- [x] `*CONTROL_MPP_DECOMPOSITION_DISTRIBUTE_ALE_ELEMENTS`
+- [x] `*CONTROL_OUTPUT`
+- [x] `*CONTROL_PARALLEL`
+- [x] `*CONTROL_REMESHING`
+- [x] `*CONTROL_RIGID`
+- [x] `*CONTROL_SHELL`
+- [x] `*CONTROL_SOLID`
+- [x] `*CONTROL_SPH`
+- [x] `*CONTROL_TERMINATION`
+- [x] `*CONTROL_THERMAL_NONLINEAR`
+- [x] `*CONTROL_THERMAL_SOLVER`
+- [x] `*CONTROL_THERMAL_TIMESTEP`
+- [x] `*CONTROL_TIMESTEP`
+
+### DAMPING (11)
+- [x] `*DAMPING_FREQUENCY_RANGE`
+- [x] `*DAMPING_FREQUENCY_RANGE_DEFORM`
+- [x] `*DAMPING_FREQUENCY_RANGE_RIGID`
+- [x] `*DAMPING_GLOBAL`
+- [x] `*DAMPING_MODAL`
+- [x] `*DAMPING_PART_MASS`
+- [x] `*DAMPING_PART_MASS_SET`
+- [x] `*DAMPING_PART_STIFFNESS`
+- [x] `*DAMPING_PART_STIFFNESS_SET`
+- [x] `*DAMPING_RELATIVE`
+- [x] `*DAMPING_STRUCTURAL`
+
+### DATABASE (32)
+- [x] `*DATABASE_ABSTAT`
+- [x] `*DATABASE_BEARING`
+- [x] `*DATABASE_BINARY_D3DUMP`
+- [x] `*DATABASE_BINARY_D3PLOT`
+- [x] `*DATABASE_BINARY_D3THDT`
+- [x] `*DATABASE_BINARY_RUNRSF`
+- [x] `*DATABASE_BNDOUT`
+- [x] `*DATABASE_CROSS_SECTION_PLANE`
+- [x] `*DATABASE_CROSS_SECTION_SET`
+- [x] `*DATABASE_CURVOUT`
+- [x] `*DATABASE_DCFAIL`
+- [x] `*DATABASE_DEFORC`
+- [x] `*DATABASE_ELOUT`
+- [x] `*DATABASE_EXTENT_BINARY`
+- [x] `*DATABASE_FORMAT`
+- [x] `*DATABASE_GLSTAT`
+- [x] `*DATABASE_HISTORY_BEAM`
+- [x] `*DATABASE_HISTORY_NODE`
+- [x] `*DATABASE_HISTORY_SHELL`
+- [x] `*DATABASE_HISTORY_SOLID`
+- [x] `*DATABASE_JNTFORC`
+- [x] `*DATABASE_MATSUM`
+- [x] `*DATABASE_NCFORC`
+- [x] `*DATABASE_NODFOR`
+- [x] `*DATABASE_NODOUT`
+- [x] `*DATABASE_RBDOUT`
+- [x] `*DATABASE_RCFORC`
+- [x] `*DATABASE_RWFORC`
+- [x] `*DATABASE_SECFORC`
+- [x] `*DATABASE_SLEOUT`
+- [x] `*DATABASE_SPCFORC`
+- [x] `*DATABASE_SPH_FLOW`
+- [x] `*DATABASE_SSSTAT`
+- [x] `*DATABASE_SWFORC`
+- [x] `*DATABASE_TPRINT`
+
+### DEFINE (24)
+- [x] `*DEFINE_BOX`
+- [x] `*DEFINE_CONNECTION_PROPERTIES`
+- [x] `*DEFINE_CONTACT_VOLUME`
+- [x] `*DEFINE_COORDINATE_NODES`
+- [x] `*DEFINE_COORDINATE_SYSTEM`
+- [x] `*DEFINE_COORDINATE_VECTOR`
+- [x] `*DEFINE_CPM_VENT`
+- [x] `*DEFINE_CURVE`
+- [x] `*DEFINE_CURVE_FUNCTION`
+- [x] `*DEFINE_CURVE_SMOOTH`
+- [x] `*DEFINE_CURVE_TITLE`
+- [x] `*DEFINE_DE_MESH_SURFACE`
+- [x] `*DEFINE_ELEMENT_DEATH`
+- [x] `*DEFINE_FRICTION`
+- [x] `*DEFINE_FUNCTION_TABULATED`
+- [x] `*DEFINE_HEX_SPOTWELD_ASSEMBLY`
+- [x] `*DEFINE_SD_ORIENTATION`
+- [x] `*DEFINE_SPH_AMBIENT_DRAG`
+- [x] `*DEFINE_SPH_INJECTION`
+- [x] `*DEFINE_SPH_MESH_BOX`
+- [x] `*DEFINE_SPH_TO_SPH_COUPLING`
+- [x] `*DEFINE_TABLE`
+- [x] `*DEFINE_TRANSFORMATION`
+- [x] `*DEFINE_VECTOR`
+
+### DEFORMABLE_TO_RIGID (5)
+- [x] `*DEFORMABLE_TO_RIGID`
+- [x] `*DEFORMABLE_TO_RIGID_AUTOMATIC`
+- [x] `*DEFORMABLE_TO_RIGID_AUTOMATIC_ID`
+- [x] `*DEFORMABLE_TO_RIGID_INERTIA`
+- [x] `*DEFORMABLE_TO_RIGID_TITLE`
+
+### DUALCESE (9)
+- [x] `*DUALCESE_BOUNDARY_PRESCRIBED_PRE`
+- [x] `*DUALCESE_BOUNDARY_PRESCRIBED_VEL`
+- [x] `*DUALCESE_BOUNDARY_REFLECTIVE`
+- [x] `*DUALCESE_CONTROL_GENERAL`
+- [x] `*DUALCESE_CONTROL_SOLVER`
+- [x] `*DUALCESE_CONTROL_TIMESTEP`
+- [x] `*DUALCESE_INITIAL`
+- [x] `*DUALCESE_MAT`
+- [x] `*DUALCESE_PART`
+
+### ELEMENT (19)
+- [x] `*ELEMENT_BEAM`
+- [x] `*ELEMENT_BEAM_ORIENTATION`
+- [x] `*ELEMENT_BEARING`
+- [x] `*ELEMENT_DISCRETE`
+- [x] `*ELEMENT_GENERALIZED_SHELL`
+- [x] `*ELEMENT_INERTIA`
+- [x] `*ELEMENT_LANCING`
+- [x] `*ELEMENT_MASS`
+- [x] `*ELEMENT_MASS_PART_SET`
+- [x] `*ELEMENT_PLOTEL`
+- [x] `*ELEMENT_SEATBELT`
+- [x] `*ELEMENT_SEATBELT_ACCELEROMETER`
+- [x] `*ELEMENT_SEATBELT_PRETENSIONER`
+- [x] `*ELEMENT_SEATBELT_RETRACTOR`
+- [x] `*ELEMENT_SEATBELT_SENSOR`
+- [x] `*ELEMENT_SHELL`
+- [x] `*ELEMENT_SHELL_THICKNESS`
+- [x] `*ELEMENT_SOLID`
+- [x] `*ELEMENT_SPH`
+- [x] `*ELEMENT_TSHELL`
+
+### EM (Electromagnetics) (11)
+- [x] `*EM_BOUNDARY`
+- [x] `*EM_CIRCUIT`
+- [x] `*EM_CONTACT`
+- [x] `*EM_CONTROL`
+- [x] `*EM_CONTROL_COUPLING`
+- [x] `*EM_ISOPOTENTIAL`
+- [x] `*EM_MAT_001`
+- [x] `*EM_MAT_002`
+- [x] `*EM_OUTPUT`
+- [x] `*EM_RANDLES_BATMAC`
+- [x] `*EM_SOLVER_FEM`
+
+### EOS (Equation of State) (8)
+- [x] `*EOS_GRUNEISEN`
+- [x] `*EOS_IDEAL_GAS`
+- [x] `*EOS_IGNITION_GROWTH`
+- [x] `*EOS_JWL`
+- [x] `*EOS_LINEAR_POLYNOMIAL`
+- [x] `*EOS_MURNAGHAN`
+- [x] `*EOS_TABULATED_COMPACTION`
+- [x] `*EOS_TILLOTSON`
+
+### FREQUENCY_DOMAIN (10)
+- [x] `*FREQUENCY_DOMAIN_ACOUSTIC_BEM`
+- [x] `*FREQUENCY_DOMAIN_ACOUSTIC_FEM`
+- [x] `*FREQUENCY_DOMAIN_FRF`
+- [x] `*FREQUENCY_DOMAIN_MODE`
+- [x] `*FREQUENCY_DOMAIN_PATH`
+- [x] `*FREQUENCY_DOMAIN_RANDOM_VIBRATION`
+- [x] `*FREQUENCY_DOMAIN_RESPONSE_SPECTRUM`
+- [x] `*FREQUENCY_DOMAIN_SSD`
+- [x] `*FREQUENCY_DOMAIN_SSD_DIRECT`
+- [x] `*FREQUENCY_DOMAIN_VIBRATION_FATIGUE`
+
+### HOURGLASS (8)
+- [x] `*HOURGLASS`
+- [x] `*HOURGLASS_BEAM`
+- [x] `*HOURGLASS_ID`
+- [x] `*HOURGLASS_PART`
+- [x] `*HOURGLASS_SHELL`
+- [x] `*HOURGLASS_SOLID`
+- [x] `*HOURGLASS_THICKNESS_CHANGE`
+- [x] `*HOURGLASS_TITLE`
+
+### ICFD (Incompressible CFD) (12)
+- [x] `*ICFD_BOUNDARY_PRESCRIBED_PRE`
+- [x] `*ICFD_BOUNDARY_PRESCRIBED_VEL`
+- [x] `*ICFD_CONTROL_FSI`
+- [x] `*ICFD_CONTROL_GENERAL`
+- [x] `*ICFD_CONTROL_MESH`
+- [x] `*ICFD_CONTROL_OUTPUT`
+- [x] `*ICFD_CONTROL_TIME`
+- [x] `*ICFD_CONTROL_TURBULENCE`
+- [x] `*ICFD_DEFINE_MESH`
+- [x] `*ICFD_INITIAL`
+- [x] `*ICFD_MAT`
+- [x] `*ICFD_PART`
+
+### INCLUDE (8)
+- [x] `*INCLUDE`
+- [x] `*INCLUDE_AUTO_OFFSET`
+- [x] `*INCLUDE_BINARY`
+- [x] `*INCLUDE_COMPENSATE`
+- [x] `*INCLUDE_PATH`
+- [x] `*INCLUDE_PATH_RELATIVE`
+- [x] `*INCLUDE_STAMPED_PART`
+- [x] `*INCLUDE_TRANSFORM`
+
+### INITIAL (15)
+- [x] `*INITIAL_AIRBAG_PARTICLE_POSITION`
+- [x] `*INITIAL_ALE_PRESSURE`
+- [x] `*INITIAL_AXIAL_FORCE_BEAM`
+- [x] `*INITIAL_DETONATION`
+- [x] `*INITIAL_FOAM_REFERENCE_GEOMETRY`
+- [x] `*INITIAL_GAS_MIXTURE`
+- [x] `*INITIAL_STRAIN_SHELL`
+- [x] `*INITIAL_STRAIN_SOLID`
+- [x] `*INITIAL_STRESS_SHELL`
+- [x] `*INITIAL_STRESS_SOLID`
+- [x] `*INITIAL_TEMPERATURE`
+- [x] `*INITIAL_TEMPERATURE_SET`
+- [x] `*INITIAL_VELOCITY`
+- [x] `*INITIAL_VELOCITY_GENERATION`
+- [x] `*INITIAL_VELOCITY_NODE`
+
+### INTEGRATION (7)
+- [x] `*INTEGRATION_BEAM`
+- [x] `*INTEGRATION_POINT`
+- [x] `*INTEGRATION_POINT_TRANSFORM`
+- [x] `*INTEGRATION_SHELL`
+- [x] `*INTEGRATION_SHELL_THICKNESS`
+- [x] `*INTEGRATION_SOLID`
+- [x] `*INTEGRATION_TSHELL`
+
+### INTERFACE (9)
+- [x] `*INTERFACE_BLANKSIZE`
+- [x] `*INTERFACE_COMPENSATION_NEW`
+- [x] `*INTERFACE_COMPONENT`
+- [x] `*INTERFACE_FRICTIONAL_SLIDELINE`
+- [x] `*INTERFACE_LINKING`
+- [x] `*INTERFACE_LINKING_DISCRETE`
+- [x] `*INTERFACE_SPRINGBACK_LSDYNA`
+- [x] `*INTERFACE_SPRINGBACK_SEAMLESS`
+- [x] `*INTERFACE_SSI`
+
+### LOAD (21)
+- [x] `*LOAD_BEAM_SET`
+- [x] `*LOAD_BLAST_ENHANCED`
+- [x] `*LOAD_BODY_PARTS`
+- [x] `*LOAD_BODY_X`
+- [x] `*LOAD_BODY_Y`
+- [x] `*LOAD_BODY_Z`
+- [x] `*LOAD_BRODE`
+- [x] `*LOAD_DENSITY_DEPTH`
+- [x] `*LOAD_GRAVITY_PART`
+- [x] `*LOAD_MOTION_NODE`
+- [x] `*LOAD_MOVING_PRESSURE`
+- [x] `*LOAD_NODE_POINT`
+- [x] `*LOAD_NODE_SET`
+- [x] `*LOAD_RIGID_BODY`
+- [x] `*LOAD_SEGMENT`
+- [x] `*LOAD_SEGMENT_SET`
+- [x] `*LOAD_SEISMIC_SSI`
+- [x] `*LOAD_SHELL_SET`
+- [x] `*LOAD_SPCFORCE`
+- [x] `*LOAD_SURFACE_STRESS`
+- [x] `*LOAD_THERMAL_CONSTANT`
+- [x] `*LOAD_THERMAL_VARIABLE`
+
+### MAT (Materials) (55)
+- [x] `*MAT_001` (Elastic)
+- [x] `*MAT_002` (Orthotropic Elastic)
+- [x] `*MAT_003` (Plastic Kinematic)
+- [x] `*MAT_004` (Elastic Plastic Thermal)
+- [x] `*MAT_005` (Soil and Foam)
+- [x] `*MAT_006` (Viscoelastic)
+- [x] `*MAT_009` (Null)
+- [x] `*MAT_010` (Elastic Plastic Hydro)
+- [x] `*MAT_015` (Johnson-Cook)
+- [x] `*MAT_018` (Power Law Plasticity)
+- [x] `*MAT_020` (Rigid)
+- [x] `*MAT_022` (Composite Damage)
+- [x] `*MAT_024` (Piecewise Linear Plasticity)
+- [x] `*MAT_025` (Geologic Cap Model)
+- [x] `*MAT_026` (Honeycomb)
+- [x] `*MAT_027` (Mooney-Rivlin Rubber)
+- [x] `*MAT_034` (Fabric)
+- [x] `*MAT_054` (Enhanced Composite Damage)
+- [x] `*MAT_055` (Enhanced Composite Damage)
+- [x] `*MAT_057` (Low Density Foam)
+- [x] `*MAT_058` (Laminated Composite Fabric)
+- [x] `*MAT_063` (Crushable Foam)
+- [x] `*MAT_077` (Ogden Rubber)
+- [x] `*MAT_081` (Plasticity with Damage)
+- [x] `*MAT_098` (Simplified Johnson-Cook)
+- [x] `*MAT_100` (Spotweld)
+- [x] `*MAT_108` (Orthotropic Elastic Plastic)
+- [x] `*MAT_123` (Modified Piecewise Linear Plasticity)
+- [x] `*MAT_187` (SAMP-1)
+- [x] `*MAT_ADD_COHESIVE`
+- [x] `*MAT_ADD_DAMAGE_GISSMO`
+- [x] `*MAT_ADD_EROSION`
+- [x] `*MAT_ADD_FATIGUE`
+- [x] `*MAT_ADD_INELASTICITY`
+- [x] `*MAT_ADD_PERMEABILITY`
+- [x] `*MAT_ADD_PORE_AIR`
+- [x] `*MAT_ADD_THERMAL_EXPANSION`
+- [x] `*MAT_COMPOSITE_DAMAGE`
+- [x] `*MAT_CRUSHABLE_FOAM`
+- [x] `*MAT_ELASTIC`
+- [x] `*MAT_ELASTIC_PLASTIC_HYDRO`
+- [x] `*MAT_ELASTIC_PLASTIC_THERMAL`
+- [x] `*MAT_FABRIC`
+- [x] `*MAT_GEOLOGIC_CAP_MODEL`
+- [x] `*MAT_HONEYCOMB`
+- [x] `*MAT_JOHNSON_COOK`
+- [x] `*MAT_LOW_DENSITY_FOAM`
+- [x] `*MAT_MODIFIED_PIECEWISE_LINEAR_PLASTICITY`
+- [x] `*MAT_MOONEY-RIVLIN_RUBBER`
+- [x] `*MAT_NULL`
+- [x] `*MAT_OGDEN_RUBBER`
+- [x] `*MAT_ORTHOTROPIC_ELASTIC_PLASTIC`
+- [x] `*MAT_PIECEWISE_LINEAR_PLASTICITY`
+- [x] `*MAT_PLASTIC_KINEMATIC`
+- [x] `*MAT_PLASTICITY_WITH_DAMAGE`
+- [x] `*MAT_POWER_LAW_PLASTICITY`
+- [x] `*MAT_RIGID`
+- [x] `*MAT_SAMP-1`
+- [x] `*MAT_SIMPLIFIED_JOHNSON_COOK`
+- [x] `*MAT_SOIL_AND_FOAM`
+- [x] `*MAT_SPOTWELD`
+- [x] `*MAT_THERMAL_ISOTROPIC`
+- [x] `*MAT_VISCOELASTIC`
+
+### NODE (1)
+- [x] `*NODE`
+
+### PARAMETER (7)
+- [x] `*PARAMETER`
+- [x] `*PARAMETER_DUPLICATION`
+- [x] `*PARAMETER_EXPRESSION`
+- [x] `*PARAMETER_EXPRESSION_LOCAL`
+- [x] `*PARAMETER_GLOBAL`
+- [x] `*PARAMETER_LOCAL`
+- [x] `*PARAMETER_TYPE`
+
+### PART (3)
+- [x] `*PART`
+- [x] `*PART_COMPOSITE`
+- [x] `*PART_INERTIA`
+
+### PERTURBATION (9)
+- [x] `*PERTURBATION_CONTACT`
+- [x] `*PERTURBATION_ELEMENT`
+- [x] `*PERTURBATION_GEOMETRY`
+- [x] `*PERTURBATION_LOAD`
+- [x] `*PERTURBATION_MAT`
+- [x] `*PERTURBATION_NODE`
+- [x] `*PERTURBATION_PART`
+- [x] `*PERTURBATION_SECTION`
+- [x] `*PERTURBATION_THICKNESS`
+
+### RIGID_TO_DEFORMABLE (1)
+- [x] `*RIGID_TO_DEFORMABLE`
+
+### RIGIDWALL (9)
+- [x] `*RIGIDWALL_GEOMETRIC_CONE`
+- [x] `*RIGIDWALL_GEOMETRIC_CYLINDER`
+- [x] `*RIGIDWALL_GEOMETRIC_FLAT`
+- [x] `*RIGIDWALL_GEOMETRIC_SPHERE`
+- [x] `*RIGIDWALL_PLANAR`
+- [x] `*RIGIDWALL_PLANAR_FINITE`
+- [x] `*RIGIDWALL_PLANAR_FORCES`
+- [x] `*RIGIDWALL_PLANAR_MOVING`
+- [x] `*RIGIDWALL_PLANAR_ORTHO`
+
+### SECTION (16)
+- [x] `*SECTION_ALE1D`
+- [x] `*SECTION_ALE2D`
+- [x] `*SECTION_BEAM`
+- [x] `*SECTION_BEAM_TITLE`
+- [x] `*SECTION_DISCRETE`
+- [x] `*SECTION_POINT_SOURCE`
+- [x] `*SECTION_POINT_SOURCE_MIXTURE`
+- [x] `*SECTION_SEATBELT`
+- [x] `*SECTION_SHELL`
+- [x] `*SECTION_SHELL_EFG`
+- [x] `*SECTION_SHELL_TITLE`
+- [x] `*SECTION_SOLID`
+- [x] `*SECTION_SOLID_EFG`
+- [x] `*SECTION_SOLID_TITLE`
+- [x] `*SECTION_SPH`
+- [x] `*SECTION_TSHELL`
+
+### SENSOR (11)
+- [x] `*SENSOR_CONTROL`
+- [x] `*SENSOR_DEFINE_CALC_MATH`
+- [x] `*SENSOR_DEFINE_COORDINATE`
+- [x] `*SENSOR_DEFINE_ELEMENT`
+- [x] `*SENSOR_DEFINE_FORCE`
+- [x] `*SENSOR_DEFINE_FUNCTION`
+- [x] `*SENSOR_DEFINE_MISC`
+- [x] `*SENSOR_DEFINE_NODE`
+- [x] `*SENSOR_SWITCH`
+- [x] `*SENSOR_SWITCH_CALC_LOGIC`
+- [x] `*SENSOR_SWITCH_SHELL_TO_SOLID`
+
+### SET (18)
+- [x] `*SET_BEAM`
+- [x] `*SET_BEAM_GENERATE`
+- [x] `*SET_DISCRETE`
+- [x] `*SET_NODE`
+- [x] `*SET_NODE_GENERATE`
+- [x] `*SET_NODE_LIST`
+- [x] `*SET_NODE_LIST_TITLE`
+- [x] `*SET_PART`
+- [x] `*SET_PART_GENERATE`
+- [x] `*SET_PART_LIST`
+- [x] `*SET_PART_LIST_TITLE`
+- [x] `*SET_SEGMENT`
+- [x] `*SET_SEGMENT_TITLE`
+- [x] `*SET_SHELL`
+- [x] `*SET_SHELL_GENERATE`
+- [x] `*SET_SHELL_LIST`
+- [x] `*SET_SOLID`
+- [x] `*SET_SOLID_GENERATE`
+- [x] `*SET_SOLID_LIST`
+
+### STOCHASTIC (9)
+- [x] `*STOCHASTIC_CORRELATED_FIELD`
+- [x] `*STOCHASTIC_MATERIAL_PROPERTY`
+- [x] `*STOCHASTIC_MONTE_CARLO_RUN`
+- [x] `*STOCHASTIC_OUTPUT`
+- [x] `*STOCHASTIC_PART`
+- [x] `*STOCHASTIC_RANDOMIZATION`
+- [x] `*STOCHASTIC_SAMPLE`
+- [x] `*STOCHASTIC_STRUCTURE_FIELD`
+- [x] `*STOCHASTIC_VARIABLE`
+
+---
+
+## Common Keywords NOT Yet Implemented
+
+These are commonly used LS-DYNA keywords that are not yet implemented:
+
+### High Priority - Commonly Used
+- [x] `*PART_COMPOSITE` ✓ Implemented
+- [x] `*PART_INERTIA` ✓ Implemented
+- [x] `*MAT_002` (Orthotropic Elastic) ✓ Implemented
+- [x] `*MAT_004` (Elastic Plastic Thermal) ✓ Implemented
+- [x] `*MAT_005` (Soil and Foam) ✓ Implemented
+- [x] `*MAT_010` (Elastic Plastic Hydrodynamic) ✓ Implemented
+- [x] `*MAT_022` (Composite Damage) ✓ Implemented
+- [x] `*MAT_025` (Geologic Cap Model) ✓ Implemented
+- [x] `*MAT_054` (Enhanced Composite Damage) ✓ Implemented
+- [x] `*MAT_058` (Laminated Composite Fabric) ✓ Implemented
+- [x] `*MAT_081` (Plasticity with Damage) ✓ Implemented
+- [x] `*MAT_098` (Simplified Johnson-Cook) ✓ Implemented
+- [x] `*MAT_187` (SAMP-1) ✓ Implemented
+- [x] `*CONTACT_AUTOMATIC_SURFACE_TO_SURFACE_TIEBREAK` ✓ Implemented
+- [x] `*CONTACT_AUTOMATIC_SINGLE_SURFACE_ID` ✓ Implemented
+- [x] `*DEFINE_COORDINATE_SYSTEM` ✓ Implemented
+- [x] `*DEFINE_CURVE_SMOOTH` ✓ Implemented
+- [x] `*DATABASE_FORMAT` ✓ Implemented
+- [x] `*DATABASE_CROSS_SECTION` ✓ Implemented (SET and PLANE variants)
+- [x] `*BOUNDARY_PRESCRIBED_ACCELEROMETER` ✓ Implemented
+
+### Medium Priority
+- [x] `*CONTROL_IMPLICIT_FORMING` ✓ Implemented
+- [x] `*CONTROL_FORMING_BESTFIT` ✓ Implemented
+- [x] `*CONTROL_FORMING_ONESTEP` ✓ Implemented
+- [x] `*CONTROL_ADAPTIVE` ✓ Implemented
+- [x] `*CONTROL_REMESHING` ✓ Implemented
+- [x] `*MAT_ORTHO_ELASTIC_PLASTIC` ✓ Implemented (*MAT_108)
+- [ ] `*MAT_COMPOSITE_LAYUP`
+- [ ] `*MAT_USER_DEFINED_MATERIAL_MODELS`
+- [x] `*ELEMENT_LANCING` ✓ Implemented
+- [x] `*ELEMENT_GENERALIZED_SHELL` ✓ Implemented
+- [x] `*SECTION_SHELL_EFG` ✓ Implemented
+- [x] `*SECTION_SOLID_EFG` ✓ Implemented
+- [x] `*AIRBAG_LOAD_CURVE` ✓ Implemented
+- [x] `*DEFINE_HEX_SPOTWELD_ASSEMBLY` ✓ Implemented
+
+### Lower Priority - Specialized
+- [x] `*CONTACT_ENTITY` ✓ Implemented
+- [x] `*CONSTRAINED_INTERPOLATION` ✓ Implemented
+- [x] `*CONSTRAINED_GLOBAL` ✓ Implemented
+- [x] `*ALE_COUPLING_NODAL_CONSTRAINT` ✓ Implemented
+- [x] `*SPH_CONTROL` ✓ Implemented (as *CONTROL_SPH)
+- [x] `*EM_RANDLES_BATMAC` ✓ Implemented
+- [x] `*ICFD_DEFINE_MESH` ✓ Implemented
+- [ ] `*NVH_*` (Noise, Vibration, Harshness keywords)
+- [ ] `*FATIGUE_*` (Fatigue analysis keywords)
+- [ ] `*IGA_*` (Isogeometric Analysis keywords)
+
+---
+
+## Development Progress Log
+
+| Date | Keywords Added | Total | Notes |
+|------|---------------|-------|-------|
+| 2026-01-18 | 4 | 510 | Added *CONSTRAINED_GLOBAL, *ALE_COUPLING_NODAL_CONSTRAINT, *ICFD_DEFINE_MESH, *EM_RANDLES_BATMAC - Lower Priority complete |
+| 2026-01-18 | 4 | 506 | Added *AIRBAG_LOAD_CURVE, *DEFINE_HEX_SPOTWELD_ASSEMBLY, *CONTACT_ENTITY, *CONSTRAINED_INTERPOLATION |
+| 2026-01-18 | 3 | 502 | Added *ELEMENT_GENERALIZED_SHELL, *SECTION_SHELL_EFG, *SECTION_SOLID_EFG |
+| 2026-01-18 | 3 | 499 | Added *CONTROL_REMESHING, *MAT_108/*MAT_ORTHOTROPIC_ELASTIC_PLASTIC, *ELEMENT_LANCING |
+| 2026-01-18 | 4 | 496 | Added *CONTROL_IMPLICIT_FORMING, *CONTROL_FORMING_BESTFIT, *CONTROL_FORMING_ONESTEP, *CONTROL_ADAPTIVE |
+| 2026-01-18 | 3 | 492 | Added *MAT_187/*MAT_SAMP-1, *BOUNDARY_PRESCRIBED_ACCELEROMETER - All High Priority items complete |
+| 2026-01-18 | 8 | 489 | Added *MAT_025/*MAT_GEOLOGIC_CAP_MODEL, *MAT_081/*MAT_PLASTICITY_WITH_DAMAGE, *MAT_098/*MAT_SIMPLIFIED_JOHNSON_COOK, *CONTACT_AUTOMATIC_SINGLE_SURFACE_ID, *DEFINE_CURVE_SMOOTH |
+| 2026-01-18 | 10 | 481 | Added *MAT_004/*MAT_ELASTIC_PLASTIC_THERMAL, *MAT_005/*MAT_SOIL_AND_FOAM, *MAT_010/*MAT_ELASTIC_PLASTIC_HYDRO, *MAT_022/*MAT_COMPOSITE_DAMAGE, *CONTACT_AUTOMATIC_SURFACE_TO_SURFACE_TIEBREAK |
+| 2026-01-18 | 13 | 471 | Added *PART_COMPOSITE, *PART_INERTIA, *MAT_002/*MAT_ORTHOTROPIC_ELASTIC, *MAT_054/*MAT_055/*MAT_ENHANCED_COMPOSITE_DAMAGE, *MAT_058/*MAT_LAMINATED_COMPOSITE_FABRIC, *DEFINE_COORDINATE_SYSTEM, *DATABASE_CROSS_SECTION_SET, *DATABASE_CROSS_SECTION_PLANE, *DATABASE_FORMAT |
+| 2026-01-18 | 10 | 458 | Added BOUNDARY_PAP, BOUNDARY_ACOUSTIC_IMPEDANCE, CONSTRAINED_RIGID_BODY_STOPPERS, CONSTRAINED_NODE_SET, ELEMENT_PLOTEL, ELEMENT_BEARING, SECTION_POINT_SOURCE, SECTION_POINT_SOURCE_MIXTURE, INITIAL_ALE_PRESSURE, INITIAL_GAS_MIXTURE |
+| Previous | 448 | 448 | Initial implementation |
+
+---
+
+## How to Add New Keywords
+
+1. **Choose the appropriate header/source file pair** based on category:
+   - `include/koo/dyna/[Category].hpp`
+   - `src/dyna/[Category].cpp`
+
+2. **Define the class** using the CRTP pattern:
+   ```cpp
+   class KOO_API NewKeyword : public CloneableKeyword<NewKeyword, BaseKeyword> {
+   public:
+       struct Data {
+           // Card fields
+       };
+
+       std::string getKeywordName() const override { return "*KEYWORD_NAME"; }
+
+       bool parse(const std::vector<std::string>& lines,
+                  util::CardParser::Format format = util::CardParser::Format::Standard) override;
+
+       std::vector<std::string> write(
+           util::CardParser::Format format = util::CardParser::Format::Standard) const override;
+
+       void accept(ModelVisitor& visitor) override;
+
+   private:
+       Data data_;
+   };
+   ```
+
+3. **Implement parsing/writing** in the `.cpp` file using `CardParser` and `CardWriter`
+
+4. **Register the keyword** using the macro:
+   ```cpp
+   REGISTER_KEYWORD(NewKeyword)
+   ```
+
+5. **Build and test**:
+   ```bash
+   cmake --build build --parallel
+   ./build/bin/koo_sim_tests
+   ./build/bin/koo_sim_cli keywords | grep "NEW_KEYWORD"
+   ```
+
+6. **Update this document** with the new keyword count and log entry
+
+---
+
+## References
+
+- [LS-DYNA Keyword User's Manual](https://www.dynasupport.com/manuals)
+- [LS-DYNA Theory Manual](https://www.dynasupport.com/manuals)

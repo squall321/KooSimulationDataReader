@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/manager_basic_usage.dir/manager_basic_usage.cpp.o -o ../bin/examples/manager_basic_usage  -Wl,-rpath,/home/koopark/claude/KooSimulationDataReader/build-phase5/lib ../lib/libkoo_sim.so.0.1.0 

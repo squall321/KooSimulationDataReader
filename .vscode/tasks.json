@@ -1,0 +1,81 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build DYNA Only",
+            "type": "shell",
+            "command": "mkdir -p build-dyna-only && cd build-dyna-only && cmake .. -DBUILD_ECAD_MODULE=OFF -DBUILD_DYNA_MODULE=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build . -j$(nproc)",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": ["$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Build ECAD Only",
+            "type": "shell",
+            "command": "mkdir -p build-ecad-only && cd build-ecad-only && cmake .. -DBUILD_DYNA_MODULE=OFF -DBUILD_ECAD_MODULE=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build . -j$(nproc)",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": ["$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Build Full Project",
+            "type": "shell",
+            "command": "mkdir -p build && cd build && cmake .. -DBUILD_DYNA_MODULE=ON -DBUILD_ECAD_MODULE=ON -DCMAKE_BUILD_TYPE=Debug && cmake --build . -j$(nproc)",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run DYNA Tests",
+            "type": "shell",
+            "command": "cd build-dyna-only && ./bin/koo_dyna_tests",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "dependsOn": ["Build DYNA Only"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Run ECAD Tests",
+            "type": "shell",
+            "command": "cd build-ecad-only && ./bin/koo_ecad_tests",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "dependsOn": ["Build ECAD Only"],
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean DYNA Build",
+            "type": "shell",
+            "command": "rm -rf build-dyna-only",
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean ECAD Build",
+            "type": "shell",
+            "command": "rm -rf build-ecad-only",
+            "problemMatcher": []
+        }
+    ]
+}

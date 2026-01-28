@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../lib/libkoo_ecad.a CMakeFiles/koo_ecad.dir/ecad/Feature.cpp.o CMakeFiles/koo_ecad.dir/ecad/Symbol.cpp.o CMakeFiles/koo_ecad.dir/ecad/Layer.cpp.o CMakeFiles/koo_ecad.dir/ecad/EdaData.cpp.o CMakeFiles/koo_ecad.dir/ecad/Step.cpp.o CMakeFiles/koo_ecad.dir/ecad/OdbJob.cpp.o CMakeFiles/koo_ecad.dir/ecad/OdbReader.cpp.o CMakeFiles/koo_ecad.dir/ecad/OdbWriter.cpp.o CMakeFiles/koo_ecad.dir/util/StringUtils.cpp.o
+/usr/bin/ranlib ../lib/libkoo_ecad.a

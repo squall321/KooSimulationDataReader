@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libkoo_cad.a CMakeFiles/koo_cad.dir/Geometry.cpp.o CMakeFiles/koo_cad.dir/ICADImporter.cpp.o CMakeFiles/koo_cad.dir/OccadImporter.cpp.o
+/usr/bin/ranlib ../../lib/libkoo_cad.a
