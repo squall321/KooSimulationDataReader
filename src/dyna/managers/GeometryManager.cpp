@@ -2,6 +2,8 @@
 #include <koo/cad/ICADImporter.hpp>
 #include <koo/mesh/IMeshGenerator.hpp>
 #include <koo/mesh/MeshData.hpp>
+#include <dirent.h>
+#include <sys/types.h>
 
 namespace koo::dyna::managers {
 
@@ -94,6 +96,112 @@ std::vector<PartId> GeometryManager::importAndMeshAssembly(
 
     std::vector<PartId> partIds;
     impl_->lastError_ = "importAndMeshAssembly: Not yet fully implemented";
+    return partIds;
+}
+
+std::vector<PartId> GeometryManager::importDirectoryAndMesh(
+    const std::string& directoryPath,
+    const mesh::MeshParameters& meshParams,
+    int materialId,
+    int sectionId,
+    const std::string& filePattern)
+{
+    std::vector<PartId> partIds;
+
+    // Scan directory for CAD files
+    std::vector<std::string> cadFiles;
+
+    // Determine file extensions to search for
+    std::vector<std::string> extensions;
+    if (filePattern.empty()) {
+        extensions = {".step", ".stp", ".iges", ".igs", ".STEP", ".STP", ".IGES", ".IGS"};
+    } else {
+        extensions = {filePattern};
+    }
+
+    // Use filesystem to scan directory
+    DIR* dir = opendir(directoryPath.c_str());
+    if (!dir) {
+        impl_->lastError_ = "Failed to open directory: " + directoryPath;
+        return partIds;
+    }
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (entry->d_type == DT_REG) {  // Regular file
+            std::string filename = entry->d_name;
+
+            // Check if file matches any extension
+            bool matches = false;
+            for (const auto& ext : extensions) {
+                if (filename.size() >= ext.size() &&
+                    filename.compare(filename.size() - ext.size(), ext.size(), ext) == 0) {
+                    matches = true;
+                    break;
+                }
+            }
+
+            if (matches) {
+                std::string fullPath = directoryPath;
+                if (!fullPath.empty() && fullPath.back() != '/') {
+                    fullPath += '/';
+                }
+                fullPath += filename;
+                cadFiles.push_back(fullPath);
+            }
+        }
+    }
+    closedir(dir);
+
+    if (cadFiles.empty()) {
+        impl_->lastError_ = "No CAD files found in directory: " + directoryPath;
+        return partIds;
+    }
+
+    // Import each file
+    for (const auto& filepath : cadFiles) {
+        // Extract filename without extension for part title
+        std::string filename = filepath.substr(filepath.find_last_of('/') + 1);
+        std::string partTitle = filename.substr(0, filename.find_last_of('.'));
+
+        PartId partId = importAndMeshCAD(filepath, meshParams, materialId, sectionId, partTitle);
+
+        if (partId > 0) {
+            partIds.push_back(partId);
+        } else {
+            // Log warning but continue with other files
+            impl_->lastError_ = "Failed to import: " + filepath + " - " + impl_->lastError_;
+        }
+    }
+
+    return partIds;
+}
+
+std::vector<PartId> GeometryManager::importBatchAndMesh(
+    const std::map<std::string, std::pair<int, int>>& fileToMatSection,
+    const mesh::MeshParameters& meshParams)
+{
+    std::vector<PartId> partIds;
+
+    for (const auto& entry : fileToMatSection) {
+        const std::string& filepath = entry.first;
+        int materialId = entry.second.first;
+        int sectionId = entry.second.second;
+
+        // Extract filename without extension for part title
+        std::string filename = filepath.substr(filepath.find_last_of('/') + 1);
+        std::string partTitle = filename.substr(0, filename.find_last_of('.'));
+
+        PartId partId = importAndMeshCAD(filepath, meshParams, materialId, sectionId, partTitle);
+
+        if (partId > 0) {
+            partIds.push_back(partId);
+        } else {
+            // Log warning but continue with other files
+            impl_->lastError_ = "Failed to import: " + filepath + " - " + impl_->lastError_;
+        }
+    }
+
     return partIds;
 }
 

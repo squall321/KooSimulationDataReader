@@ -123,6 +123,56 @@ public:
         const mesh::MeshParameters& meshParams
     );
 
+    /**
+     * @brief Batch import all STEP/IGES files from a directory
+     * @param directoryPath Path to directory containing CAD files
+     * @param meshParams Mesh generation parameters
+     * @param materialId Material ID to assign to all parts
+     * @param sectionId Section ID to assign to all parts
+     * @param filePattern File extension filter (e.g., ".step", ".stp", ".iges")
+     *                    Default: empty (imports all .step, .stp, .iges, .igs files)
+     * @return Vector of part IDs (one per file), empty on failure
+     *
+     * Scans directory for CAD files matching the pattern and imports them.
+     * Each file becomes a separate part with the same material/section.
+     * Part titles are derived from filenames.
+     *
+     * Example:
+     *   auto params = mesh::MeshParameters::medium(5.0);
+     *   auto partIds = geomMgr.importDirectoryAndMesh("./cad_models", params, 1, 1);
+     *   // Imports all .step/.stp/.iges/.igs files from ./cad_models
+     *
+     *   auto stepOnly = geomMgr.importDirectoryAndMesh("./parts", params, 1, 1, ".step");
+     *   // Imports only .step files
+     */
+    std::vector<PartId> importDirectoryAndMesh(
+        const std::string& directoryPath,
+        const mesh::MeshParameters& meshParams,
+        int materialId,
+        int sectionId,
+        const std::string& filePattern = ""
+    );
+
+    /**
+     * @brief Batch import with per-file material/section mapping
+     * @param fileToMatSection Map: filepath → (material ID, section ID)
+     * @param meshParams Mesh generation parameters
+     * @return Vector of part IDs (one per file), empty on failure
+     *
+     * Imports multiple CAD files with individual material/section assignments.
+     *
+     * Example:
+     *   std::map<std::string, std::pair<int, int>> mapping = {
+     *       {"part1.step", {1, 1}},  // Steel part
+     *       {"part2.step", {2, 2}},  // Aluminum part
+     *   };
+     *   auto partIds = geomMgr.importBatchAndMesh(mapping, params);
+     */
+    std::vector<PartId> importBatchAndMesh(
+        const std::map<std::string, std::pair<int, int>>& fileToMatSection,
+        const mesh::MeshParameters& meshParams
+    );
+
     // ========================================================================
     // Step-by-Step Workflow (Low-Level Control)
     // ========================================================================
