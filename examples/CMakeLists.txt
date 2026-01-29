@@ -60,6 +60,30 @@ if(BUILD_CAD_MODULE AND BUILD_MESH_MODULE)
     endif()
 endif()
 
+# Phase 5e: Batch Mesh Generation Examples
+if(BUILD_CAD_MODULE AND BUILD_MESH_MODULE)
+    add_koo_example(batch_mesh_generation batch_mesh_generation.cpp)
+    add_koo_example(batch_mesh_with_materials batch_mesh_with_materials.cpp)
+
+    if(WITH_OPENCASCADE AND OpenCASCADE_FOUND AND WITH_GMSH AND Gmsh_FOUND)
+        message(STATUS "Example: batch_mesh_generation (directory-based meshing)")
+        message(STATUS "Example: batch_mesh_with_materials (per-file material mapping)")
+    else()
+        message(STATUS "Example: batch meshing (stub implementation)")
+    endif()
+endif()
+
+# Phase 5e: Structured Mesh Generation Example
+if(BUILD_CAD_MODULE AND BUILD_MESH_MODULE)
+    add_koo_example(structured_mesh_generation structured_mesh_generation.cpp)
+
+    if(WITH_OPENCASCADE AND OpenCASCADE_FOUND AND WITH_GMSH AND Gmsh_FOUND)
+        message(STATUS "Example: structured_mesh_generation (hexahedral/extrusion meshing)")
+    else()
+        message(STATUS "Example: structured_mesh_generation (stub implementation)")
+    endif()
+endif()
+
 # ============================================================================
 # ECAD Examples (if ECAD module is built)
 # ============================================================================

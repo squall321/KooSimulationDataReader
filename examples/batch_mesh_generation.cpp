@@ -12,7 +12,7 @@
 #include <koo/dyna/Model.hpp>
 #include <koo/dyna/managers/ModelManager.hpp>
 #include <koo/dyna/managers/GeometryManager.hpp>
-#include <koo/dyna/io/KeywordFileWriter.hpp>
+#include <koo/dyna/KeywordFileWriter.hpp>
 #include <koo/mesh/MeshParameters.hpp>
 #include <iostream>
 
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     int materialId = 1;
     int sectionId = 1;
 
-    std::vector<dyna::PartId> partIds = geomMgr.importDirectoryAndMesh(
+    auto partIds = geomMgr.importDirectoryAndMesh(
         directoryPath,
         meshParams,
         materialId,
@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
     // Write LS-DYNA keyword file
     std::cout << "Writing LS-DYNA keyword file: " << outputFile << std::endl;
 
-    dyna::io::KeywordFileWriter writer;
+    dyna::KeywordFileWriter writer;
     if (!writer.write(model, outputFile)) {
         std::cerr << "ERROR: Failed to write keyword file!" << std::endl;
         return 1;

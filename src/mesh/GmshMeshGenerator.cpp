@@ -127,12 +127,24 @@ public:
         gmsh::option::setNumber("Mesh.ElementOrder",
             params.elementOrder == ElementOrder::Linear ? 1 : 2);
 
+        // Set recombination for hex/quad generation
+        if (params.allowQuads || params.allowHexes || params.recombineAll) {
+            gmsh::option::setNumber("Mesh.RecombineAll", 1);
+            gmsh::option::setNumber("Mesh.RecombinationAlgorithm", 2);  // Blossom algorithm
+            gmsh::option::setNumber("Mesh.Recombine3DAll", 1);
+        }
+
         // Set algorithm
         int algoCode = 1;  // MeshAdapt default
-        switch (algorithm_) {
-            case MeshAlgorithm::Delaunay: algoCode = 5; break;
-            case MeshAlgorithm::Frontal: algoCode = 6; break;
-            case MeshAlgorithm::Automatic: algoCode = 1; break;
+        if (params.useStructuredMesh || params.useTransfinite) {
+            // For structured meshes, use simpler algorithm
+            algoCode = 1;  // MeshAdapt
+        } else {
+            switch (algorithm_) {
+                case MeshAlgorithm::Delaunay: algoCode = 5; break;
+                case MeshAlgorithm::Frontal: algoCode = 6; break;
+                case MeshAlgorithm::Automatic: algoCode = 1; break;
+            }
         }
         gmsh::option::setNumber("Mesh.Algorithm", algoCode);
         gmsh::option::setNumber("Mesh.Algorithm3D", algoCode);
@@ -144,6 +156,20 @@ public:
         // Set parallel cores
         if (numCores_ > 0) {
             gmsh::option::setNumber("General.NumThreads", numCores_);
+        }
+
+        // Apply structured mesh settings
+        if (params.useTransfinite || params.useStructuredMesh) {
+            applyTransfiniteMesh(params);
+        }
+
+        // Apply extrusion if requested
+        if (params.autoDetectExtrusion && dimension == 3) {
+            if (tryExtrusionMesh(params)) {
+                extractMeshData();
+                return true;
+            }
+            // If extrusion fails, fall through to regular meshing
         }
 
         // Generate mesh
@@ -162,6 +188,85 @@ public:
             lastError_ = std::string("Gmsh mesh generation failed: ") + e.what();
             return false;
         }
+#endif
+    }
+
+    void applyTransfiniteMesh(const MeshParameters& params) {
+#ifdef KOO_HAS_GMSH
+        try {
+            // Get all curves (edges) and surfaces
+            std::vector<std::pair<int, int>> dimTags;
+            gmsh::model::getEntities(dimTags, 1);  // 1 = curves
+
+            // Apply transfinite to all curves
+            for (const auto& dimTag : dimTags) {
+                gmsh::model::mesh::setTransfiniteCurve(dimTag.second, params.transfiniteDivisions);
+            }
+
+            // Apply transfinite to surfaces
+            dimTags.clear();
+            gmsh::model::getEntities(dimTags, 2);  // 2 = surfaces
+            for (const auto& dimTag : dimTags) {
+                gmsh::model::mesh::setTransfiniteSurface(dimTag.second);
+                gmsh::model::mesh::setRecombine(2, dimTag.second);  // Recombine to quads
+            }
+
+            // Apply transfinite to volumes
+            dimTags.clear();
+            gmsh::model::getEntities(dimTags, 3);  // 3 = volumes
+            for (const auto& dimTag : dimTags) {
+                gmsh::model::mesh::setTransfiniteVolume(dimTag.second);
+                gmsh::model::mesh::setRecombine(3, dimTag.second);  // Recombine to hexes
+            }
+        } catch (const std::exception& e) {
+            // Transfinite may fail for complex geometries - not fatal
+            lastError_ = std::string("Transfinite mesh setup warning: ") + e.what();
+        }
+#endif
+    }
+
+    bool tryExtrusionMesh(const MeshParameters& params) {
+#ifdef KOO_HAS_GMSH
+        try {
+            // First, generate 2D surface mesh
+            gmsh::model::mesh::generate(2);
+
+            // Get all surfaces
+            std::vector<std::pair<int, int>> surfaces;
+            gmsh::model::getEntities(surfaces, 2);
+
+            if (surfaces.empty()) {
+                return false;
+            }
+
+            // Try to extrude the first surface as a test
+            // In a full implementation, we'd detect which surfaces are extrudable
+            std::vector<int> numElements = {params.extrusionLayers};
+            std::vector<double> heights = {
+                params.extrusionLayerThickness * params.extrusionLayers
+            };
+
+            // Extrude surface
+            std::vector<std::pair<int, int>> outDimTags;
+            gmsh::model::geo::extrude(
+                {surfaces[0]},  // Input entities
+                0, 0, heights[0],  // Extrusion direction (Z)
+                outDimTags,
+                numElements,
+                heights,
+                true  // recombine = true (generate hexes)
+            );
+
+            gmsh::model::geo::synchronize();
+            return true;
+
+        } catch (const std::exception& e) {
+            lastError_ = std::string("Extrusion attempt failed: ") + e.what();
+            return false;
+        }
+#else
+        (void)params;
+        return false;
 #endif
     }
 

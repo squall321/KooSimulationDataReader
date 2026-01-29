@@ -57,6 +57,17 @@ struct KOO_API MeshParameters {
     double smoothingSteps = 1;         ///< Number of smoothing iterations
 
     // ========================================================================
+    // Structured/Extrusion Options
+    // ========================================================================
+
+    bool useStructuredMesh = false;    ///< Use structured (transfinite) mesh
+    bool autoDetectExtrusion = true;   ///< Auto-detect extrudable geometries
+    int extrusionLayers = 10;          ///< Number of layers for extrusion
+    double extrusionLayerThickness = 1.0;  ///< Thickness per extrusion layer
+    bool useTransfinite = false;       ///< Use transfinite meshing (structured)
+    int transfiniteDivisions = 10;     ///< Divisions for transfinite mesh
+
+    // ========================================================================
     // Presets
     // ========================================================================
 
@@ -150,6 +161,42 @@ struct KOO_API MeshParameters {
         params.allowQuads = true;
         params.allowHexes = true;
         params.recombineAll = true;
+        return params;
+    }
+
+    /**
+     * @brief Structured mesh preset (hexahedral)
+     * @param size Global element size
+     * @param divisions Number of divisions for transfinite mesh
+     * @return Parameters for structured mesh
+     */
+    static MeshParameters structured(double size = 5.0, int divisions = 10) {
+        MeshParameters params = medium(size);
+        params.useStructuredMesh = true;
+        params.allowQuads = true;
+        params.allowHexes = true;
+        params.recombineAll = true;
+        params.useTransfinite = true;
+        params.transfiniteDivisions = divisions;
+        params.numOptimizationPasses = 1;  // Less optimization needed for structured
+        return params;
+    }
+
+    /**
+     * @brief Extrusion-based mesh preset
+     * @param layerThickness Thickness per layer
+     * @param numLayers Number of layers
+     * @return Parameters for extrusion mesh
+     */
+    static MeshParameters extruded(double layerThickness = 1.0, int numLayers = 10) {
+        MeshParameters params = medium(layerThickness * numLayers / 10.0);
+        params.autoDetectExtrusion = true;
+        params.extrusionLayers = numLayers;
+        params.extrusionLayerThickness = layerThickness;
+        params.allowQuads = true;
+        params.allowHexes = true;
+        params.recombineAll = true;
+        params.numOptimizationPasses = 1;
         return params;
     }
 };

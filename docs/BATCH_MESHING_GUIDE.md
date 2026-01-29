@@ -164,7 +164,7 @@ params.recombineAll = false;
 #include <koo/dyna/Model.hpp>
 #include <koo/dyna/managers/ModelManager.hpp>
 #include <koo/dyna/managers/GeometryManager.hpp>
-#include <koo/dyna/io/KeywordFileWriter.hpp>
+#include <koo/dyna/KeywordFileWriter.hpp>
 #include <koo/mesh/MeshParameters.hpp>
 
 int main() {
@@ -197,7 +197,7 @@ int main() {
               << std::endl;
 
     // 5. Write LS-DYNA keyword file
-    koo::dyna::io::KeywordFileWriter writer;
+    koo::dyna::KeywordFileWriter writer;
     writer.write(model, "output.k");
 
     return 0;

@@ -9,7 +9,7 @@
 #include <koo/dyna/Model.hpp>
 #include <koo/dyna/managers/ModelManager.hpp>
 #include <koo/dyna/managers/GeometryManager.hpp>
-#include <koo/dyna/io/KeywordFileWriter.hpp>
+#include <koo/dyna/KeywordFileWriter.hpp>
 #include <koo/mesh/MeshParameters.hpp>
 #include <iostream>
 #include <map>
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     // Batch import with mapping
     std::cout << "Importing CAD files..." << std::endl;
 
-    std::vector<dyna::PartId> partIds = geomMgr.importBatchAndMesh(
+    auto partIds = geomMgr.importBatchAndMesh(
         fileMapping,
         meshParams
     );
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     std::string outputFile = "multi_material_mesh.k";
     std::cout << "Writing LS-DYNA keyword file: " << outputFile << std::endl;
 
-    dyna::io::KeywordFileWriter writer;
+    dyna::KeywordFileWriter writer;
     if (!writer.write(model, outputFile)) {
         std::cerr << "ERROR: Failed to write keyword file!" << std::endl;
         return 1;
