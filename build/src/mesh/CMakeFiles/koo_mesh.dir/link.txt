@@ -1,2 +1,0 @@
-/usr/bin/ar qc ../../lib/libkoo_mesh.a CMakeFiles/koo_mesh.dir/IMeshGenerator.cpp.o CMakeFiles/koo_mesh.dir/GmshMeshGenerator.cpp.o
-/usr/bin/ranlib ../../lib/libkoo_mesh.a

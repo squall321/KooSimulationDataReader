@@ -1,3 +1,0 @@
-repository='external project URL'
-module='https://gmsh.info/bin/Linux/gmsh-4.13.1-Linux64-sdk.tgz'
-tag=''

@@ -1,5 +1,0 @@
-if(EXISTS "/home/koopark/claude/KooSimulationDataReader/build/tests/koo_ecad_tests[1]_tests.cmake")
-  include("/home/koopark/claude/KooSimulationDataReader/build/tests/koo_ecad_tests[1]_tests.cmake")
-else()
-  add_test(koo_ecad_tests_NOT_BUILT koo_ecad_tests_NOT_BUILT)
-endif()

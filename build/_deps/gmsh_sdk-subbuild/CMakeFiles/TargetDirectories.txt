@@ -1,3 +1,0 @@
-/home/koopark/claude/KooSimulationDataReader/build/_deps/gmsh_sdk-subbuild/CMakeFiles/gmsh_sdk-populate.dir
-/home/koopark/claude/KooSimulationDataReader/build/_deps/gmsh_sdk-subbuild/CMakeFiles/edit_cache.dir
-/home/koopark/claude/KooSimulationDataReader/build/_deps/gmsh_sdk-subbuild/CMakeFiles/rebuild_cache.dir
