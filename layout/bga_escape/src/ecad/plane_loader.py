@@ -154,10 +154,15 @@ def parse_features_file(text: str, layer_name: str) -> Tuple[PlanePolygon, ...]:
 
 def load_plane_geometry(odb_root: str | Path,
                           step: str = 'mentor',
-                          plane_layer_names: Iterable[str] = (
-                              'GND', 'VDD', 'VSS', 'VCC', 'PWR')
+                          plane_layer_names: Optional[Iterable[str]] = None
                           ) -> PlaneGeometry:
     """Walk steps/<step>/layers/<plane>/features for each candidate plane.
+
+    Layer-name detection priority (Phase D-3):
+      1. Caller-supplied ``plane_layer_names`` — explicit substrings.
+      2. Matrix file scan — every layer with TYPE=POWER_GROUND or MIXED
+         (this is the canonical source).
+      3. Fallback name-substring heuristic (GND/VDD/VSS/VCC/PWR).
 
     Returns an empty PlaneGeometry (layers={}) when nothing is found —
     callers check `.layers`. Never raises on missing files.
@@ -169,10 +174,25 @@ def load_plane_geometry(odb_root: str | Path,
     if not layers_dir.exists():
         return PlaneGeometry(layers={}, units_mm=True)
 
-    # Walk every layer dir; we don't know the exact names in advance,
-    # so we accept any layer whose name contains one of the candidate
-    # substrings (case-insensitive).
-    candidates = set(s.upper() for s in plane_layer_names)
+    # Priority 1 — explicit override
+    candidates: Optional[set] = None
+    if plane_layer_names:
+        candidates = set(s.upper() for s in plane_layer_names)
+    else:
+        # Priority 2 — matrix file (canonical)
+        try:
+            from .matrix_loader import load_matrix
+            mx = load_matrix(root)
+            if mx is not None:
+                plane_names = mx.plane_layer_names()
+                if plane_names:
+                    candidates = set(n.upper() for n in plane_names)
+        except Exception:
+            candidates = None
+    # Priority 3 — name-substring fallback
+    if not candidates:
+        candidates = {'GND', 'VDD', 'VSS', 'VCC', 'PWR'}
+
     for layer_dir in layers_dir.iterdir():
         if not layer_dir.is_dir():
             continue
