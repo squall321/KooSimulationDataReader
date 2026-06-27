@@ -141,7 +141,15 @@ def run_route(odb: str, bga: str, recipe_name: str,
         internals = base.pop('_internals', None)
         result.metrics = legacy.extract_extended_metrics(base)
         if internals is not None:
-            _populate_extended_metrics(result.metrics, internals, base)
+            # Phase B metrics enrichment is best-effort. If it crashes we
+            # keep the base metrics and surface the error under
+            # phase_b_errors['_outer'] instead of wiping the result.
+            try:
+                _populate_extended_metrics(result.metrics, internals, base)
+            except Exception as e:
+                result.metrics.setdefault('phase_b_errors', {})['_outer'] = (
+                    f'{type(e).__name__}: {str(e)[:200]}'
+                )
     except Exception as e:
         result.error = f'{type(e).__name__}: {str(e)[:200]}'
         result.metrics = {'elapsed_s': round(time.time() - t0, 3)}
@@ -159,6 +167,8 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     """
     grid = internals['grid']
     routed_paths = internals['routed_paths']
+    tasks = internals['tasks']
+    spec = internals.get('spec')
 
     from bga_router.metrics.path_geometry import (
         path_length_mm,
@@ -187,6 +197,74 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     # Fill the legacy placeholder so downstream consumers stop seeing null.
     if metrics.get('total_length_mm') is None:
         metrics['total_length_mm'] = metrics['geometry']['total_length_mm']
+
+    # Phase B — fold extra geometry, cross-net, and rule_check sub-dicts.
+    from bga_router.metrics.geometry import summarize_geometry
+    from bga_router.metrics.cross_net import summarize_cross_net
+    from bga_router.metrics.verifier import verify_all
+
+    # ``summarize_geometry`` expects task.source / task.sink to be
+    # (layer, ix, iy) tuples (see geometry.py:266). Real RoutingTask
+    # uses NetEndpoint objects, so wrap them in a lightweight shim.
+    class _TaskTupleView:
+        __slots__ = ('net_name', 'source', 'sink', 'rule')
+        def __init__(self, t):
+            self.net_name = t.net_name
+            self.source = (t.source.layer, t.source.ix, t.source.iy)
+            self.sink = (t.sink.layer, t.sink.ix, t.sink.iy)
+            self.rule = t.rule
+
+    # Phase B metrics are best-effort. A bug in any of these aggregators
+    # must NOT clobber the base metrics — leave the corresponding sub-dict
+    # absent and record the error in metrics['phase_b_errors'].
+    phase_b_errors: Dict[str, str] = {}
+
+    try:
+        tasks_for_geo = [_TaskTupleView(t) for t in tasks]
+    except Exception as e:
+        tasks_for_geo = []
+        phase_b_errors['task_shim'] = f'{type(e).__name__}: {e}'
+
+    geo_extras: Dict[str, Any] = {}
+    try:
+        geo_extras = summarize_geometry(routed_paths, grid, tasks_for_geo)
+        for k, v in geo_extras.items():
+            # do not overwrite total_length_mm produced above
+            if k == 'total_length_mm':
+                continue
+            metrics['geometry'][k] = v
+    except Exception as e:
+        phase_b_errors['summarize_geometry'] = f'{type(e).__name__}: {e}'
+
+    try:
+        cross_extras = summarize_cross_net(routed_paths, grid)
+        for k, v in cross_extras.items():
+            metrics['geometry'][k] = v
+    except Exception as e:
+        phase_b_errors['summarize_cross_net'] = f'{type(e).__name__}: {e}'
+
+    # Legacy placeholder sharp_bends — fill from summarize_geometry result.
+    if 'sharp_bends' in geo_extras:
+        metrics['sharp_bends'] = geo_extras['sharp_bends']
+
+    try:
+        rc = verify_all(routed_paths, tasks, grid, spec=spec, stackup=None)
+        by_field_serialized = {}
+        for fname, r in rc['by_field'].items():
+            by_field_serialized[fname] = {
+                'pass':      bool(r.passed),
+                'violators': list(r.violators),
+                'note':      r.note,
+            }
+        metrics['rule_check'] = {
+            'violations': rc['violations'],
+            'by_field':   by_field_serialized,
+        }
+    except Exception as e:
+        phase_b_errors['verify_all'] = f'{type(e).__name__}: {e}'
+
+    if phase_b_errors:
+        metrics['phase_b_errors'] = phase_b_errors
 
 
 def eval_dataset(dataset_name: str,
