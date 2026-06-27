@@ -593,7 +593,7 @@ def preferred_layer_pct(path, grid, rule) -> float:
 
 
 def verify_all(routed_paths: dict, tasks: list, grid, spec,
-               *, stackup=None) -> dict:
+               *, stackup=None, plane_geom=None) -> dict:
     """Run every applicable check; return {'violations': int, 'by_field': {...}}."""
     # Build per-net rule mapping
     rules_by_net = {}
@@ -666,8 +666,8 @@ def verify_all(routed_paths: dict, tasks: list, grid, spec,
             if not ko:
                 per_check_violators['keep_out_ok'].append(net)
 
-        # split_avoidance (N/A unless plane_geometry passed — not currently)
-        sa = check_split_avoidance(path, grid, rule, plane_geometry=None)
+        # split_avoidance (now wired with plane_geom from Phase C2)
+        sa = check_split_avoidance(path, grid, rule, plane_geometry=plane_geom)
         if sa is not None:
             per_check_na['split_avoidance_ok'] = False
             if not sa:

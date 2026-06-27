@@ -145,7 +145,8 @@ def run_route(odb: str, bga: str, recipe_name: str,
             # keep the base metrics and surface the error under
             # phase_b_errors['_outer'] instead of wiping the result.
             try:
-                _populate_extended_metrics(result.metrics, internals, base)
+                _populate_extended_metrics(result.metrics, internals, base,
+                                            entry=entry)
             except Exception as e:
                 result.metrics.setdefault('phase_b_errors', {})['_outer'] = (
                     f'{type(e).__name__}: {str(e)[:200]}'
@@ -159,7 +160,8 @@ def run_route(odb: str, bga: str, recipe_name: str,
 
 def _populate_extended_metrics(metrics: Dict[str, Any],
                                  internals: Dict[str, Any],
-                                 base: Dict[str, Any]) -> None:
+                                 base: Dict[str, Any],
+                                 *, entry=None) -> None:
     """Phase A hook — fills geometry.* sub-dict and the placeholder fields
     (``total_length_mm``, ``sharp_bends`` …) that ``extract_extended_metrics``
     leaves as ``None``. Phase B (rule_check) and Phase C (si / standard)
@@ -247,8 +249,46 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     if 'sharp_bends' in geo_extras:
         metrics['sharp_bends'] = geo_extras['sharp_bends']
 
+    # Phase C — stackup + plane_geom (both optional). Resolve once per run.
+    phase_c_errors: Dict[str, str] = {}
+
+    stackup = None
     try:
-        rc = verify_all(routed_paths, tasks, grid, spec=spec, stackup=None)
+        from bga_router.metrics.stackup import default_stackup, load_for_dataset
+        stackup = load_for_dataset(entry)
+        if stackup.is_default:
+            metrics['stackup_default_used'] = True
+    except Exception as e:
+        phase_c_errors['stackup'] = f'{type(e).__name__}: {e}'
+        try:
+            from bga_router.metrics.stackup import default_stackup
+            stackup = default_stackup()
+            metrics['stackup_default_used'] = True
+        except Exception:
+            stackup = None
+
+    plane_geom = None
+    try:
+        from src.ecad.plane_loader import PlaneGeometry, load_plane_geometry
+        if entry is not None:
+            step = getattr(entry, 'step', None) or 'mentor'
+            plane_geom = load_plane_geometry(getattr(entry, 'path', '.'),
+                                              step=step)
+        else:
+            plane_geom = PlaneGeometry(layers={}, units_mm=True)
+    except Exception as e:
+        phase_c_errors['plane_loader'] = f'{type(e).__name__}: {e}'
+        try:
+            from src.ecad.plane_loader import PlaneGeometry
+            plane_geom = PlaneGeometry(layers={}, units_mm=True)
+        except Exception:
+            plane_geom = None
+
+    # rule_check — now wired with stackup + plane_geom (impedance_target,
+    # via_type, split_avoidance promote from N/A when data is available).
+    try:
+        rc = verify_all(routed_paths, tasks, grid, spec=spec,
+                         stackup=stackup, plane_geom=plane_geom)
         by_field_serialized = {}
         for fname, r in rc['by_field'].items():
             by_field_serialized[fname] = {
@@ -263,8 +303,53 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_b_errors['verify_all'] = f'{type(e).__name__}: {e}'
 
+    # Phase C — analytical SI
+    try:
+        from bga_router.metrics.si import summarize_si
+        rules_by_net = {t.net_name: t.rule for t in tasks}
+        if stackup is not None:
+            metrics['si'] = summarize_si(routed_paths, grid, rules_by_net,
+                                          stackup)
+    except Exception as e:
+        phase_c_errors['summarize_si'] = f'{type(e).__name__}: {e}'
+
+    # Phase C — return-path metrics. PG vias + stitching vias come from
+    # PathResult metadata once available (Phase D); empty for now.
+    try:
+        from bga_router.metrics.return_path import summarize_return_path
+        if plane_geom is not None:
+            rp = summarize_return_path(
+                routed_paths, grid, plane_geom,
+                power_ground_vias_xy=[], stitching_vias_xy=[],
+                reference_layer='GND')
+            # Tuck into si.* so the consumer sees one SI block.
+            metrics.setdefault('si', {})['return_path'] = rp
+    except Exception as e:
+        phase_c_errors['summarize_return_path'] = f'{type(e).__name__}: {e}'
+
+    # Phase C — high-speed standard pass/fail
+    try:
+        from bga_router.metrics.standards import summarize_standards
+        # Pre-compute per-net lengths for length-budget checks (USB3.2).
+        lengths = {}
+        for net, pr in routed_paths.items():
+            path = getattr(pr, 'path', None)
+            if path:
+                lengths[net] = round(path_length_mm(path, grid), 4)
+        metrics['standard'] = summarize_standards(
+            routed_paths,
+            metrics.get('geometry', {}),
+            metrics.get('si', {}),
+            metrics.get('rule_check', {}),
+            lengths=lengths,
+        )
+    except Exception as e:
+        phase_c_errors['summarize_standards'] = f'{type(e).__name__}: {e}'
+
     if phase_b_errors:
         metrics['phase_b_errors'] = phase_b_errors
+    if phase_c_errors:
+        metrics['phase_c_errors'] = phase_c_errors
 
 
 def eval_dataset(dataset_name: str,
