@@ -350,6 +350,16 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['summarize_return_path'] = f'{type(e).__name__}: {e}'
 
+    # Phase D — EM queue hook (marginal Z0 / impedance miss → solver)
+    try:
+        from bga_router.metrics.em_queue import build_em_queue
+        rbn = {t.net_name: t.rule for t in tasks}
+        metrics['em_queue'] = build_em_queue(
+            routed_paths, grid, rbn,
+            metrics.get('si') or {}, metrics.get('rule_check') or {})
+    except Exception as e:
+        phase_c_errors['em_queue'] = f'{type(e).__name__}: {e}'
+
     # Phase C — high-speed standard pass/fail
     try:
         from bga_router.metrics.standards import summarize_standards
