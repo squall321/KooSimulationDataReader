@@ -99,8 +99,18 @@ def _resolve_dataset(name_or_path: str):
 
 
 def run_route(odb: str, bga: str, recipe_name: str,
-              budget_s: int = 60) -> Dict[str, Any]:
-    """Run one (dataset, bga, recipe) and return a single result JSON."""
+              budget_s: int = 60,
+              *,
+              stackup_yaml: Optional[str] = None,
+              plane_layer_names: Optional[tuple] = None) -> Dict[str, Any]:
+    """Run one (dataset, bga, recipe) and return a single result JSON.
+
+    Phase C kwargs:
+      stackup_yaml — explicit path overriding registry.stackup_yaml
+      plane_layer_names — tuple of substrings (case-insensitive); when
+        supplied, only layers whose name contains one of these are
+        treated as plane layers by the loader.
+    """
     legacy, exc = _lazy_legacy()
     if legacy is None:
         raise RuntimeError(f'legacy bga_eval import failed: {exc}')
@@ -146,7 +156,9 @@ def run_route(odb: str, bga: str, recipe_name: str,
             # phase_b_errors['_outer'] instead of wiping the result.
             try:
                 _populate_extended_metrics(result.metrics, internals, base,
-                                            entry=entry)
+                                            entry=entry,
+                                            stackup_yaml_override=stackup_yaml,
+                                            plane_layer_names=plane_layer_names)
             except Exception as e:
                 result.metrics.setdefault('phase_b_errors', {})['_outer'] = (
                     f'{type(e).__name__}: {str(e)[:200]}'
@@ -161,7 +173,10 @@ def run_route(odb: str, bga: str, recipe_name: str,
 def _populate_extended_metrics(metrics: Dict[str, Any],
                                  internals: Dict[str, Any],
                                  base: Dict[str, Any],
-                                 *, entry=None) -> None:
+                                 *, entry=None,
+                                 stackup_yaml_override: Optional[str] = None,
+                                 plane_layer_names: Optional[tuple] = None
+                                 ) -> None:
     """Phase A hook — fills geometry.* sub-dict and the placeholder fields
     (``total_length_mm``, ``sharp_bends`` …) that ``extract_extended_metrics``
     leaves as ``None``. Phase B (rule_check) and Phase C (si / standard)
@@ -254,8 +269,13 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
 
     stackup = None
     try:
-        from bga_router.metrics.stackup import default_stackup, load_for_dataset
-        stackup = load_for_dataset(entry)
+        from bga_router.metrics.stackup import (default_stackup,
+                                                  load_for_dataset,
+                                                  load_stackup_yaml)
+        if stackup_yaml_override:
+            stackup = load_stackup_yaml(stackup_yaml_override)
+        else:
+            stackup = load_for_dataset(entry)
         if stackup.is_default:
             metrics['stackup_default_used'] = True
     except Exception as e:
@@ -272,8 +292,11 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
         from src.ecad.plane_loader import PlaneGeometry, load_plane_geometry
         if entry is not None:
             step = getattr(entry, 'step', None) or 'mentor'
+            kwargs: Dict[str, Any] = {'step': step}
+            if plane_layer_names:
+                kwargs['plane_layer_names'] = plane_layer_names
             plane_geom = load_plane_geometry(getattr(entry, 'path', '.'),
-                                              step=step)
+                                              **kwargs)
         else:
             plane_geom = PlaneGeometry(layers={}, units_mm=True)
     except Exception as e:
