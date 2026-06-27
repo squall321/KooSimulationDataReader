@@ -131,13 +131,17 @@ def cmd_route(args: argparse.Namespace) -> int:
             'features': sel.features,
         }
         print(f'[auto-recipe] selected {sel.recipe!r}: {sel.rationale}')
+    checks_arg = getattr(args, 'checks', None)
+    checks_tuple = (tuple(c.strip() for c in checks_arg.split(',') if c.strip())
+                     if checks_arg else None)
     result = _eval.run_route(args.dataset, bga, recipe_name,
                              budget_s=args.budget,
                              stackup_yaml=getattr(args, 'stackup', None),
                              plane_layer_names=(
                                  tuple(args.plane_layers.split(','))
                                  if getattr(args, 'plane_layers', None)
-                                 else None))
+                                 else None),
+                             checks=checks_tuple)
     if selection_meta is not None:
         result['auto_recipe_selection'] = selection_meta
     _emit(result, args.output)
@@ -275,6 +279,12 @@ def build_parser() -> argparse.ArgumentParser:
                        help='Comma-separated layer name substrings to treat '
                             'as plane layers (Phase C return-path metrics). '
                             'Default: GND,VDD,VSS,VCC,PWR.')
+    p_rt.add_argument('--checks', default=None,
+                       help='Comma-separated check areas to enable. '
+                            'Choices: geometry,cross_net,rule_check,si,'
+                            'standard,em_queue,return_path. Default: all on. '
+                            'Use to skip expensive cross-net checks on large '
+                            'designs (e.g. --checks=geometry,rule_check,si).')
     p_rt.set_defaults(func=cmd_route)
 
     # eval (sweep)

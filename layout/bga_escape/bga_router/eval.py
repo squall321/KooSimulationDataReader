@@ -102,14 +102,18 @@ def run_route(odb: str, bga: str, recipe_name: str,
               budget_s: int = 60,
               *,
               stackup_yaml: Optional[str] = None,
-              plane_layer_names: Optional[tuple] = None) -> Dict[str, Any]:
+              plane_layer_names: Optional[tuple] = None,
+              checks: Optional[tuple] = None) -> Dict[str, Any]:
     """Run one (dataset, bga, recipe) and return a single result JSON.
 
-    Phase C kwargs:
-      stackup_yaml — explicit path overriding registry.stackup_yaml
+    Phase C/D kwargs:
+      stackup_yaml — explicit path overriding registry.stackup_yaml.
       plane_layer_names — tuple of substrings (case-insensitive); when
         supplied, only layers whose name contains one of these are
         treated as plane layers by the loader.
+      checks — tuple of enabled check areas. None = all on. Choices:
+        geometry, cross_net, rule_check, si, standard, em_queue,
+        return_path. Use to skip expensive checks on large designs.
     """
     legacy, exc = _lazy_legacy()
     if legacy is None:
@@ -158,7 +162,8 @@ def run_route(odb: str, bga: str, recipe_name: str,
                 _populate_extended_metrics(result.metrics, internals, base,
                                             entry=entry,
                                             stackup_yaml_override=stackup_yaml,
-                                            plane_layer_names=plane_layer_names)
+                                            plane_layer_names=plane_layer_names,
+                                            checks=checks)
             except Exception as e:
                 result.metrics.setdefault('phase_b_errors', {})['_outer'] = (
                     f'{type(e).__name__}: {str(e)[:200]}'
@@ -170,13 +175,23 @@ def run_route(odb: str, bga: str, recipe_name: str,
     return result.to_json()
 
 
+_ALL_CHECKS = frozenset((
+    'geometry', 'cross_net', 'rule_check', 'si', 'standard',
+    'em_queue', 'return_path',
+))
+
+
 def _populate_extended_metrics(metrics: Dict[str, Any],
                                  internals: Dict[str, Any],
                                  base: Dict[str, Any],
                                  *, entry=None,
                                  stackup_yaml_override: Optional[str] = None,
-                                 plane_layer_names: Optional[tuple] = None
+                                 plane_layer_names: Optional[tuple] = None,
+                                 checks: Optional[tuple] = None
                                  ) -> None:
+    enabled = (set(checks) & _ALL_CHECKS) if checks else _ALL_CHECKS
+    def _on(name: str) -> bool:
+        return name in enabled
     """Phase A hook — fills geometry.* sub-dict and the placeholder fields
     (``total_length_mm``, ``sharp_bends`` …) that ``extract_extended_metrics``
     leaves as ``None``. Phase B (rule_check) and Phase C (si / standard)
@@ -243,22 +258,24 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
         phase_b_errors['task_shim'] = f'{type(e).__name__}: {e}'
 
     geo_extras: Dict[str, Any] = {}
-    try:
-        geo_extras = summarize_geometry(routed_paths, grid, tasks_for_geo)
-        for k, v in geo_extras.items():
-            # do not overwrite total_length_mm produced above
-            if k == 'total_length_mm':
-                continue
-            metrics['geometry'][k] = v
-    except Exception as e:
-        phase_b_errors['summarize_geometry'] = f'{type(e).__name__}: {e}'
+    if _on('geometry'):
+        try:
+            geo_extras = summarize_geometry(routed_paths, grid, tasks_for_geo)
+            for k, v in geo_extras.items():
+                # do not overwrite total_length_mm produced above
+                if k == 'total_length_mm':
+                    continue
+                metrics['geometry'][k] = v
+        except Exception as e:
+            phase_b_errors['summarize_geometry'] = f'{type(e).__name__}: {e}'
 
-    try:
-        cross_extras = summarize_cross_net(routed_paths, grid)
-        for k, v in cross_extras.items():
-            metrics['geometry'][k] = v
-    except Exception as e:
-        phase_b_errors['summarize_cross_net'] = f'{type(e).__name__}: {e}'
+    if _on('cross_net'):
+        try:
+            cross_extras = summarize_cross_net(routed_paths, grid)
+            for k, v in cross_extras.items():
+                metrics['geometry'][k] = v
+        except Exception as e:
+            phase_b_errors['summarize_cross_net'] = f'{type(e).__name__}: {e}'
 
     # Legacy placeholder sharp_bends — fill from summarize_geometry result.
     if 'sharp_bends' in geo_extras:
@@ -309,75 +326,79 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
 
     # rule_check — now wired with stackup + plane_geom (impedance_target,
     # via_type, split_avoidance promote from N/A when data is available).
-    try:
-        rc = verify_all(routed_paths, tasks, grid, spec=spec,
-                         stackup=stackup, plane_geom=plane_geom)
-        by_field_serialized = {}
-        for fname, r in rc['by_field'].items():
-            by_field_serialized[fname] = {
-                'pass':      bool(r.passed),
-                'violators': list(r.violators),
-                'note':      r.note,
+    if _on('rule_check'):
+        try:
+            rc = verify_all(routed_paths, tasks, grid, spec=spec,
+                             stackup=stackup, plane_geom=plane_geom)
+            by_field_serialized = {}
+            for fname, r in rc['by_field'].items():
+                by_field_serialized[fname] = {
+                    'pass':      bool(r.passed),
+                    'violators': list(r.violators),
+                    'note':      r.note,
+                }
+            metrics['rule_check'] = {
+                'violations': rc['violations'],
+                'by_field':   by_field_serialized,
             }
-        metrics['rule_check'] = {
-            'violations': rc['violations'],
-            'by_field':   by_field_serialized,
-        }
-    except Exception as e:
-        phase_b_errors['verify_all'] = f'{type(e).__name__}: {e}'
+        except Exception as e:
+            phase_b_errors['verify_all'] = f'{type(e).__name__}: {e}'
 
     # Phase C — analytical SI
-    try:
-        from bga_router.metrics.si import summarize_si
-        rules_by_net = {t.net_name: t.rule for t in tasks}
-        if stackup is not None:
-            metrics['si'] = summarize_si(routed_paths, grid, rules_by_net,
-                                          stackup)
-    except Exception as e:
-        phase_c_errors['summarize_si'] = f'{type(e).__name__}: {e}'
+    if _on('si'):
+        try:
+            from bga_router.metrics.si import summarize_si
+            rules_by_net = {t.net_name: t.rule for t in tasks}
+            if stackup is not None:
+                metrics['si'] = summarize_si(routed_paths, grid,
+                                               rules_by_net, stackup)
+        except Exception as e:
+            phase_c_errors['summarize_si'] = f'{type(e).__name__}: {e}'
 
     # Phase C — return-path metrics. PG vias + stitching vias come from
     # PathResult metadata once available (Phase D); empty for now.
-    try:
-        from bga_router.metrics.return_path import summarize_return_path
-        if plane_geom is not None:
-            rp = summarize_return_path(
-                routed_paths, grid, plane_geom,
-                power_ground_vias_xy=[], stitching_vias_xy=[],
-                reference_layer='GND')
-            # Tuck into si.* so the consumer sees one SI block.
-            metrics.setdefault('si', {})['return_path'] = rp
-    except Exception as e:
-        phase_c_errors['summarize_return_path'] = f'{type(e).__name__}: {e}'
+    if _on('return_path'):
+        try:
+            from bga_router.metrics.return_path import summarize_return_path
+            if plane_geom is not None:
+                rp = summarize_return_path(
+                    routed_paths, grid, plane_geom,
+                    power_ground_vias_xy=[], stitching_vias_xy=[],
+                    reference_layer='GND')
+                metrics.setdefault('si', {})['return_path'] = rp
+        except Exception as e:
+            phase_c_errors['summarize_return_path'] = f'{type(e).__name__}: {e}'
 
     # Phase D — EM queue hook (marginal Z0 / impedance miss → solver)
-    try:
-        from bga_router.metrics.em_queue import build_em_queue
-        rbn = {t.net_name: t.rule for t in tasks}
-        metrics['em_queue'] = build_em_queue(
-            routed_paths, grid, rbn,
-            metrics.get('si') or {}, metrics.get('rule_check') or {})
-    except Exception as e:
-        phase_c_errors['em_queue'] = f'{type(e).__name__}: {e}'
+    if _on('em_queue'):
+        try:
+            from bga_router.metrics.em_queue import build_em_queue
+            rbn = {t.net_name: t.rule for t in tasks}
+            metrics['em_queue'] = build_em_queue(
+                routed_paths, grid, rbn,
+                metrics.get('si') or {}, metrics.get('rule_check') or {})
+        except Exception as e:
+            phase_c_errors['em_queue'] = f'{type(e).__name__}: {e}'
 
     # Phase C — high-speed standard pass/fail
-    try:
-        from bga_router.metrics.standards import summarize_standards
-        # Pre-compute per-net lengths for length-budget checks (USB3.2).
-        lengths = {}
-        for net, pr in routed_paths.items():
-            path = getattr(pr, 'path', None)
-            if path:
-                lengths[net] = round(path_length_mm(path, grid), 4)
-        metrics['standard'] = summarize_standards(
-            routed_paths,
-            metrics.get('geometry', {}),
-            metrics.get('si', {}),
-            metrics.get('rule_check', {}),
-            lengths=lengths,
-        )
-    except Exception as e:
-        phase_c_errors['summarize_standards'] = f'{type(e).__name__}: {e}'
+    if _on('standard'):
+        try:
+            from bga_router.metrics.standards import summarize_standards
+            # Pre-compute per-net lengths for length-budget checks (USB3.2).
+            lengths = {}
+            for net, pr in routed_paths.items():
+                path = getattr(pr, 'path', None)
+                if path:
+                    lengths[net] = round(path_length_mm(path, grid), 4)
+            metrics['standard'] = summarize_standards(
+                routed_paths,
+                metrics.get('geometry', {}),
+                metrics.get('si', {}),
+                metrics.get('rule_check', {}),
+                lengths=lengths,
+            )
+        except Exception as e:
+            phase_c_errors['summarize_standards'] = f'{type(e).__name__}: {e}'
 
     if phase_b_errors:
         metrics['phase_b_errors'] = phase_b_errors
