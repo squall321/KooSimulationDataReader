@@ -542,26 +542,48 @@ def check_shield_present(path, routed_paths, rules_by_net, rule, grid
     return True
 
 
+def _path_adjacency(path):
+    """Build undirected adjacency dict from consecutive cells."""
+    adj: dict = {}
+    for i in range(len(path) - 1):
+        a, b = path[i], path[i + 1]
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+    return adj
+
+
 def check_topology(path, rule) -> Optional[bool]:
-    """daisy_chain → must be a simple chain (no branches). star/tee → N/A."""
+    """Validate routed graph matches declared NetRule.net_topology.
+
+    daisy_chain — simple linear chain (max degree 2, exactly 2 degree-1 nodes).
+    star        — central hub with N>=3 spokes; exactly 1 node with
+                  degree>=3, all other non-leaves have degree 2.
+    tee         — exactly 1 degree-3 branch point (main + 1 stub).
+
+    For BGA escape (2-pin nets) any declared star/tee on a chain-only
+    path returns False with the caller-set note explaining the mismatch.
+    """
     if rule.net_topology is None:
         return None
-    if rule.net_topology in ('star', 'tee'):
-        return None  # note set by caller
+    adj = _path_adjacency(path)
+    if not adj:
+        return True
+    degrees = [len(v) for v in adj.values()]
+    endpoints = sum(1 for d in degrees if d == 1)
+    branches_3 = sum(1 for d in degrees if d == 3)
+    branches_high = sum(1 for d in degrees if d >= 3)
+    max_deg = max(degrees)
+
     if rule.net_topology == 'daisy_chain':
-        # Build adjacency on (layer, ix, iy) and check each node has degree ≤ 2,
-        # with exactly 2 endpoints (degree 1).
-        adj: dict = {}
-        for i in range(len(path) - 1):
-            a, b = path[i], path[i + 1]
-            adj.setdefault(a, set()).add(b)
-            adj.setdefault(b, set()).add(a)
-        if not adj:
-            return True
-        degrees = [len(v) for v in adj.values()]
-        endpoints = sum(1 for d in degrees if d == 1)
-        max_deg = max(degrees)
         return max_deg <= 2 and endpoints == 2
+    if rule.net_topology == 'tee':
+        # Exactly one degree-3 vertex, no degree>=4 vertices
+        return branches_3 == 1 and max_deg == 3
+    if rule.net_topology == 'star':
+        # Exactly one hub (degree >= 3), every other non-leaf has degree 2
+        if branches_high != 1:
+            return False
+        return max_deg >= 3
     return None
 
 
@@ -711,16 +733,12 @@ def verify_all(routed_paths: dict, tasks: list, grid, spec,
                 per_check_notes['shield_present_ok'] = (
                     'N/A: no PG nets in routed_paths')
 
-        # topology
+        # topology — daisy_chain / star / tee 모두 검증 (Phase D-2).
         topo = check_topology(path, rule)
         if topo is not None:
             per_check_na['topology_ok'] = False
             if not topo:
                 per_check_violators['topology_ok'].append(net)
-        else:
-            if rule.net_topology in ('star', 'tee'):
-                per_check_notes['topology_ok'] = (
-                    'topology check not implemented for star/tee')
 
     # Materialise path-only results
     for field_name, viol in per_check_violators.items():

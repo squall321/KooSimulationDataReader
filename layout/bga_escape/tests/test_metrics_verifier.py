@@ -390,14 +390,46 @@ def test_topology_daisy_chain_fail_branch():
     assert check_topology(path, rule) is False
 
 
-def test_topology_star_na():
+def test_topology_star_chain_fails():
+    """A simple 2-pin chain declared as star → mismatch, return False
+    (Phase D-2 — was N/A before)."""
     rule = _Rule(net_topology='star')
-    assert check_topology([('M1', 0, 0)], rule) is None
+    path = [('M1', 0, 0), ('M1', 1, 0), ('M1', 2, 0)]
+    assert check_topology(path, rule) is False
+
+
+def test_topology_star_with_hub_passes():
+    """Build a 3-spoke star: central (1,0) connects to (0,0), (2,0), (1,1)."""
+    rule = _Rule(net_topology='star')
+    path = [('M1', 0, 0), ('M1', 1, 0), ('M1', 2, 0),
+            ('M1', 1, 0), ('M1', 1, 1)]
+    # (1,0) has 3 neighbors: (0,0), (2,0), (1,1) — single hub
+    assert check_topology(path, rule) is True
+
+
+def test_topology_tee_passes():
+    """Tee = one degree-3 branch point, no degree-4."""
+    rule = _Rule(net_topology='tee')
+    path = [('M1', 0, 0), ('M1', 1, 0), ('M1', 2, 0),
+            ('M1', 1, 0), ('M1', 1, 1)]
+    assert check_topology(path, rule) is True
+
+
+def test_topology_tee_fails_on_pure_chain():
+    rule = _Rule(net_topology='tee')
+    path = [('M1', 0, 0), ('M1', 1, 0), ('M1', 2, 0)]
+    assert check_topology(path, rule) is False
 
 
 def test_topology_none_na():
     rule = _Rule(net_topology=None)
     assert check_topology([('M1', 0, 0)], rule) is None
+
+
+def test_topology_empty_path_true():
+    """Single-point path has empty adjacency → vacuously satisfies."""
+    rule = _Rule(net_topology='daisy_chain')
+    assert check_topology([('M1', 0, 0)], rule) is True
 
 
 # ---------------------------------------------------------------------------
