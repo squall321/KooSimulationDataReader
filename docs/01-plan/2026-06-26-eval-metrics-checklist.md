@@ -6,37 +6,37 @@ each item lands. Keep this file as the single source of truth for
 
 ## Phase 0 — investigation (gate Phase A)
 
-- [ ] Map `AStarResult` / routed-path data structure (where lives, what fields)
-- [ ] Locate `extract_extended_metrics` call site + return contract
-- [ ] Inventory existing metric-like computations in post-processors:
+- [x] Map `AStarResult` / routed-path data structure (where lives, what fields)
+- [x] Locate `extract_extended_metrics` call site + return contract
+- [x] Inventory existing metric-like computations in post-processors:
       `manufacturing_drc.py`, `length_match_post_processor.py`,
       `diff_pair_post_processor.py`, `propagation_delay_match.py` —
       lift, don't reimplement
-- [ ] Pick the integration seam (single function that gets called with
+- [x] Pick the integration seam (single function that gets called with
       `(routed_paths, NetRule_map, grid, stackup)` and returns dict)
-- [ ] Decision: in-tree module path. Candidate: `bga_router/metrics/`
+- [x] Decision: in-tree module path. Candidate: `bga_router/metrics/`
 
 ## Phase A — geometry
 
 `bga_router/metrics/geometry.py` (new module).
 
-- [ ] `total_length_mm(path, pitch_mm) -> float`
-- [ ] `length_per_layer_mm(path, pitch_mm) -> dict[str, float]`
-- [ ] `via_count_per_net(path) -> int` (lift from AStarResult)
-- [ ] `layer_transition_count(path) -> int`
-- [ ] `sharp_bends(path, threshold_deg=135) -> int`
-- [ ] `acute_bends(path, threshold_deg=90) -> int`
-- [ ] `bend_density_per_mm(path, pitch_mm) -> float`
-- [ ] `bbox_straightness(path) -> float`
-- [ ] `routing_efficiency(path, start_xy, end_xy, pitch_mm) -> float`
-- [ ] `detour_count(path) -> int`
-- [ ] `escape_side_fidelity_pct(path, requested_sides) -> float`
-- [ ] `channel_congestion_max(all_paths, grid) -> int`
-- [ ] `shadow_crossings_2d(all_paths) -> int`
-- [ ] `layer_utilization(all_paths, grid) -> dict[str, float]`
-- [ ] Expose `residual_overuse` from base dict into output JSON
-- [ ] Wire into `extract_extended_metrics` under key `geometry.*`
-- [ ] Unit tests: synthetic 4-segment path with hand-computed values
+- [x] `total_length_mm(path, pitch_mm) -> float`
+- [x] `length_per_layer_mm(path, pitch_mm) -> dict[str, float]`
+- [x] `via_count_per_net(path) -> int` (lift from AStarResult)
+- [x] `layer_transition_count(path) -> int`
+- [x] `sharp_bends(path, threshold_deg=135) -> int`
+- [x] `acute_bends(path, threshold_deg=90) -> int`
+- [x] `bend_density_per_mm(path, pitch_mm) -> float`
+- [x] `bbox_straightness(path) -> float`
+- [x] `routing_efficiency(path, start_xy, end_xy, pitch_mm) -> float`
+- [x] `detour_count(path) -> int`
+- [x] `escape_side_fidelity_pct(path, requested_sides) -> float`
+- [x] `channel_congestion_max(all_paths, grid) -> int`
+- [x] `shadow_crossings_2d(all_paths) -> int`
+- [x] `layer_utilization(all_paths, grid) -> dict[str, float]`
+- [x] Expose `residual_overuse` from base dict into output JSON
+- [x] Wire into `extract_extended_metrics` under key `geometry.*`
+- [x] Unit tests: synthetic 4-segment path with hand-computed values
 
 ## Phase B — NetRule vs result verifier
 
@@ -45,72 +45,72 @@ each item lands. Keep this file as the single source of truth for
 API: `verify(routed_paths: dict[str, Path], rules: dict[str, NetRule],
 all_paths, grid, stackup) -> dict[str, RuleCheckResult]`
 
-- [ ] `layers_membership_ok` — every segment.layer ∈ rule.layers
-- [ ] `escape_side_ok` — first exit direction vs rule.escape_sides
-- [ ] `width_ok` — rendered width matches rule.width_mm (placeholder
+- [x] `layers_membership_ok` — every segment.layer ∈ rule.layers
+- [x] `escape_side_ok` — first exit direction vs rule.escape_sides
+- [x] `width_ok` — rendered width matches rule.width_mm (placeholder
       until per-segment width tracking lands; bool always true for now,
       flag in context-notes)
-- [ ] `pair_gap_ok` — partner-net perpendicular distance vs pair_gap_mm
-- [ ] `pair_skew_ok` — abs(len(P)-len(N)) ≤ rule.pair_skew_max_mm
-- [ ] `clearance_ok` — same-layer other-net polyline min distance
+- [x] `pair_gap_ok` — partner-net perpendicular distance vs pair_gap_mm
+- [x] `pair_skew_ok` — abs(len(P)-len(N)) ≤ rule.pair_skew_max_mm
+- [x] `clearance_ok` — same-layer other-net polyline min distance
       ≥ rule.clearance_mm. Uses STRtree spatial index.
-- [ ] `length_group_ok` — length_match_group max-min ≤ tolerance
-- [ ] `via_budget_ok` — via_count ≤ rule.max_via_count
-- [ ] `min_length_ok` — total_length ≥ rule.min_trace_length_mm
-- [ ] `shield_present_ok` — rule.shield_required → both-side GND polylines exist
-- [ ] `keep_out_ok` — path ∩ rule.keep_out_zones = ∅
-- [ ] `topology_ok` — net_topology (daisy/star/tee) matches routed graph
-- [ ] `split_avoidance_ok` — plane-split overlap == 0 when avoidance requested
-- [ ] `bend_class_ok` — bend_class threshold (90° / 45°) honored
-- [ ] `impedance_target_ok` — analytical Z0 (from Phase C) within tol
-- [ ] `preferred_layer_pct` — soft metric (0..1)
-- [ ] Aggregate `violations` count
-- [ ] Per-violation: `{net, field, expected, actual, why}` payload
-- [ ] Wire into `extract_extended_metrics` under key `rule_check.*`
-- [ ] Unit tests: 1 PASS + 1 FAIL synthetic case per rule
+- [x] `length_group_ok` — length_match_group max-min ≤ tolerance
+- [x] `via_budget_ok` — via_count ≤ rule.max_via_count
+- [x] `min_length_ok` — total_length ≥ rule.min_trace_length_mm
+- [x] `shield_present_ok` — rule.shield_required → both-side GND polylines exist
+- [x] `keep_out_ok` — path ∩ rule.keep_out_zones = ∅
+- [x] `topology_ok` — net_topology (daisy/star/tee) matches routed graph
+- [x] `split_avoidance_ok` — plane-split overlap == 0 when avoidance requested
+- [x] `bend_class_ok` — bend_class threshold (90° / 45°) honored
+- [x] `impedance_target_ok` — analytical Z0 (from Phase C) within tol
+- [x] `preferred_layer_pct` — soft metric (0..1)
+- [x] Aggregate `violations` count
+- [x] Per-violation: `{net, field, expected, actual, why}` payload
+- [x] Wire into `extract_extended_metrics` under key `rule_check.*`
+- [x] Unit tests: 1 PASS + 1 FAIL synthetic case per rule
 
 ## Phase C — analytical SI + standards
 
 `bga_router/metrics/stackup.py` + `bga_router/metrics/si.py`.
 
 ### C.1 — StackupSpec
-- [ ] `StackupSpec` dataclass (per-layer t_mm, h_mm, εr, role, refs)
-- [ ] `load_stackup(yaml_path) -> StackupSpec`
-- [ ] Default 4-layer FR-4 fallback when YAML absent
-- [ ] `stackup_default_used: true` flag in output
+- [x] `StackupSpec` dataclass (per-layer t_mm, h_mm, εr, role, refs)
+- [x] `load_stackup(yaml_path) -> StackupSpec`
+- [x] Default 4-layer FR-4 fallback when YAML absent
+- [x] `stackup_default_used: true` flag in output
 
 ### C.2 — closed-form impedance
-- [ ] `z0_microstrip_wadell(w, t, h, er) -> float`
-- [ ] `z0_stripline_wadell(w, t, h, er) -> float`
-- [ ] `zdiff_microstrip_wadell(w, t, h, s, er) -> float`
-- [ ] `zdiff_stripline_wadell(w, t, h, s, er) -> float`
-- [ ] `z0_for_net(path, stackup, width_mm) -> float`
-- [ ] `z0_variance_pct(path_z0_segments) -> float`
-- [ ] `via_stub_length_mm(path, stackup) -> float`
-- [ ] Mark `z0_formula_marginal: true` when s/h < 0.5 or h < 50 μm
+- [x] `z0_microstrip_wadell(w, t, h, er) -> float`
+- [x] `z0_stripline_wadell(w, t, h, er) -> float`
+- [x] `zdiff_microstrip_wadell(w, t, h, s, er) -> float`
+- [x] `zdiff_stripline_wadell(w, t, h, s, er) -> float`
+- [x] `z0_for_net(path, stackup, width_mm) -> float`
+- [x] `z0_variance_pct(path_z0_segments) -> float`
+- [x] `via_stub_length_mm(path, stackup) -> float`
+- [x] Mark `z0_formula_marginal: true` when s/h < 0.5 or h < 50 μm
 
 ### C.3 — return path + DC
-- [ ] `return_path_continuity_score(path, plane_layers) -> float`
-- [ ] `plane_split_crossings(path, plane_split_polys) -> int`
-- [ ] `reference_plane_changes_no_stitch(path, plane_layers, vias) -> int`
-- [ ] `nearest_return_via_distance_mm(path, vias) -> float`
-- [ ] `branch_dc_resistance_mohm(path, copper_thickness, width) -> float`
+- [x] `return_path_continuity_score(path, plane_layers) -> float`
+- [x] `plane_split_crossings(path, plane_split_polys) -> int`
+- [x] `reference_plane_changes_no_stitch(path, plane_layers, vias) -> int`
+- [x] `nearest_return_via_distance_mm(path, vias) -> float`
+- [x] `branch_dc_resistance_mohm(path, copper_thickness, width) -> float`
 
 ### C.4 — standard checks
-- [ ] `check_ddr4(metrics) -> StandardResult`
-- [ ] `check_pcie_gen3(metrics) -> StandardResult`
-- [ ] `check_usb32(metrics) -> StandardResult`
-- [ ] `check_hdmi(metrics) -> StandardResult` (optional)
-- [ ] Net-class → standard mapping (via NetRule.net_topology or naming)
-- [ ] Wire into output under `si.*` + `standard.*`
+- [x] `check_ddr4(metrics) -> StandardResult`
+- [x] `check_pcie_gen3(metrics) -> StandardResult`
+- [x] `check_usb32(metrics) -> StandardResult`
+- [x] `check_hdmi(metrics) -> StandardResult` (optional)
+- [x] Net-class → standard mapping (via NetRule.net_topology or naming)
+- [x] Wire into output under `si.*` + `standard.*`
 
 ### C.5 — tests + docs
-- [ ] Wadell formulas: verify against published reference values
+- [x] Wadell formulas: verify against published reference values
       (Polar Si9000 table — pick 5 known stackups, compute, assert ±2%)
-- [ ] Property test: Z0 monotonic with w (narrower → higher Z0)
-- [ ] DDR4 pass/fail: feed in a known-good DQ trace, must pass
+- [x] Property test: Z0 monotonic with w (narrower → higher Z0)
+- [x] DDR4 pass/fail: feed in a known-good DQ trace, must pass
 
-## Phase D — EM queue hooks (NOT inline)
+## Phase D — EM queue hooks (NOT inline) — DEFERRED to next PR
 
 - [ ] `em_queue` block in output JSON listing (net, region_bbox, layers)
       for nets that failed `impedance_target_ok` or have
@@ -121,17 +121,19 @@ all_paths, grid, stackup) -> dict[str, RuleCheckResult]`
 ## CLI
 
 - [ ] `route` / `eval` accept `--checks=geometry,rule_check,si,standard`
-      (default: all)
-- [ ] `route` / `eval` accept `--stackup <path/to/stackup.yaml>` override
+      (default: all) — DEFERRED, all checks always on right now
+- [x] `route` accepts `--stackup <path/to/stackup.yaml>` override
+- [x] `route` accepts `--plane-layers <name1,name2>` override
 - [ ] Aggregator gains `routed_ratio_with_rule_pass` column
-      (= routed AND rule_check.violations == 0)
+      (= routed AND rule_check.violations == 0) — DEFERRED.
+      Added Length/Sharp/RuleViol/Z0var/Std columns instead.
 
 ## Validation gate
 
-- [ ] Existing 9 metrics byte-identical on `P3_EUR_REV03 bga218f` baseline
-- [ ] All 6 existing recipes still pass the regression bar
-- [ ] New tests added for every Phase A/B/C field above
-- [ ] Aggregator markdown report renders without column overflow
+- [x] Existing 9 metrics byte-identical on `P3_EUR_REV03 bga218f` baseline
+- [x] All 6 existing recipes still pass the regression bar
+- [x] New tests added for every Phase A/B/C field above
+- [x] Aggregator markdown report renders without column overflow
 
 ## Out of scope (explicitly NOT in this PR)
 
