@@ -355,16 +355,26 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
         except Exception as e:
             phase_c_errors['summarize_si'] = f'{type(e).__name__}: {e}'
 
-    # Phase C — return-path metrics. PG vias + stitching vias come from
-    # PathResult metadata once available (Phase D); empty for now.
+    # Phase C — return-path metrics. PG vias + stitching vias derived
+    # from path + net classification (Phase D-6).
     if _on('return_path'):
         try:
             from bga_router.metrics.return_path import summarize_return_path
+            from bga_router.metrics.path_geometry import (
+                collect_pg_via_xy, collect_stitching_via_xy,
+            )
             if plane_geom is not None:
+                pg_vias = collect_pg_via_xy(routed_paths, grid)
+                stitch_vias = collect_stitching_via_xy(routed_paths, grid)
                 rp = summarize_return_path(
                     routed_paths, grid, plane_geom,
-                    power_ground_vias_xy=[], stitching_vias_xy=[],
+                    power_ground_vias_xy=pg_vias,
+                    stitching_vias_xy=stitch_vias,
                     reference_layer='GND')
+                # Surface counts at top of return-path block for visibility
+                if isinstance(rp, dict):
+                    rp.setdefault('inferred_pg_via_count', len(pg_vias))
+                    rp.setdefault('inferred_stitch_via_count', len(stitch_vias))
                 metrics.setdefault('si', {})['return_path'] = rp
         except Exception as e:
             phase_c_errors['summarize_return_path'] = f'{type(e).__name__}: {e}'
