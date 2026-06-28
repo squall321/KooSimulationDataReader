@@ -204,6 +204,19 @@ def cmd_aggregate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_em_dispatch(args: argparse.Namespace) -> int:
+    from .integrations.em_queue_dispatch import dispatch, summarize_dispatch
+    written = dispatch(args.input, args.out)
+    summary = summarize_dispatch(written)
+    print(f"[em-dispatch] wrote {summary['count']} task files to "
+          f"{summary['output_dir']}")
+    for s in summary['sample']:
+        print(f'  - {s}')
+    if summary['count'] > 3:
+        print(f'  ... and {summary["count"] - 3} more')
+    return 0
+
+
 def _emit(payload, output_path):
     if output_path:
         p = Path(output_path)
@@ -308,6 +321,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_ag.add_argument('--results-dir', required=True)
     p_ag.add_argument('--output', help='Output markdown path.')
     p_ag.set_defaults(func=cmd_aggregate)
+
+    # em-dispatch — Phase D-5: em_queue → per-net sim task files
+    p_em = sub.add_parser('em-dispatch',
+                            help='Convert em_queue entries to per-net sim '
+                                 'task files for sol_b / sol_d.')
+    p_em.add_argument('--input', required=True,
+                       help='Eval result JSON path (from `route` or one of '
+                            '`eval --output-dir/...`).')
+    p_em.add_argument('--out', required=True,
+                       help='Output directory for per-net task JSONs.')
+    p_em.set_defaults(func=cmd_em_dispatch)
 
     return p
 
