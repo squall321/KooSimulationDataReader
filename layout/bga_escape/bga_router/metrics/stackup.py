@@ -36,14 +36,55 @@ class LayerEntry:
 
 
 @dataclass(frozen=True)
+class ViaSpan:
+    """Declared via span — start/end signal layer + via kind/finished diameter."""
+    name: str
+    start_layer: str
+    end_layer: str
+    kind: str = 'through'           # 'through' | 'blind' | 'buried' | 'microvia'
+    drill_mm: Optional[float] = None
+    finished_mm: Optional[float] = None
+
+
+@dataclass(frozen=True)
 class StackupSpec:
     layers: Tuple[LayerEntry, ...]              # top-to-bottom
     source_path: Optional[str] = None
     is_default: bool = False
+    vias: Tuple[ViaSpan, ...] = ()              # Phase D-4
 
     # --- introspection ---
     def signal_layer_names(self) -> Tuple[str, ...]:
         return tuple(L.name for L in self.layers if L.kind == 'copper')
+
+    def via_by_name(self, name: str) -> Optional[ViaSpan]:
+        for v in self.vias:
+            if v.name == name:
+                return v
+        return None
+
+    def stack_thickness_between_mm(self, start_layer: str,
+                                     end_layer: str) -> Optional[float]:
+        """Sum of all layer thicknesses (inclusive) between two signal layers."""
+        i = self._index_of(start_layer)
+        j = self._index_of(end_layer)
+        if i is None or j is None:
+            return None
+        lo, hi = min(i, j), max(i, j)
+        return sum(L.thickness_mm for L in self.layers[lo:hi + 1])
+
+    def stub_length_for_via(self, via: ViaSpan, used_start: str,
+                              used_end: str) -> Optional[float]:
+        """How much of the via's stack is *unused* — the back-drill candidate.
+
+        used_start / used_end = the layers the signal actually uses.
+        Returns mm of via barrel not carrying signal. None when layers
+        unresolvable in the stackup."""
+        full = self.stack_thickness_between_mm(via.start_layer, via.end_layer)
+        used = self.stack_thickness_between_mm(used_start, used_end)
+        if full is None or used is None:
+            return None
+        return max(0.0, full - used)
 
     def _index_of(self, layer_name: str) -> Optional[int]:
         for i, L in enumerate(self.layers):
@@ -167,8 +208,27 @@ def load_stackup_yaml(path: str | Path) -> StackupSpec:
                     f'must be separated by at least one dielectric')
             last_copper_idx = i
 
+    # Phase D-4 — optional `vias:` block
+    raw_vias = data.get('vias') or []
+    vias: List[ViaSpan] = []
+    if isinstance(raw_vias, list):
+        for i, raw in enumerate(raw_vias):
+            if not isinstance(raw, dict):
+                continue
+            name = raw.get('name')
+            sl = raw.get('start_layer') or raw.get('from')
+            el = raw.get('end_layer') or raw.get('to')
+            if not name or not sl or not el:
+                continue
+            vias.append(ViaSpan(
+                name=str(name), start_layer=str(sl), end_layer=str(el),
+                kind=str(raw.get('kind') or 'through'),
+                drill_mm=raw.get('drill_mm'),
+                finished_mm=raw.get('finished_mm'),
+            ))
+
     return StackupSpec(layers=tuple(entries), source_path=str(p),
-                        is_default=False)
+                        is_default=False, vias=tuple(vias))
 
 
 def default_stackup() -> StackupSpec:
@@ -182,7 +242,13 @@ def default_stackup() -> StackupSpec:
         LayerEntry('pp2',   0.10,  'prepreg',  material='FR4', er=4.2, loss_tangent=0.02),
         LayerEntry('LAY4',  0.035, 'copper',   material='Cu'),
     )
-    return StackupSpec(layers=layers, source_path=None, is_default=True)
+    # default through-via spans the full stack
+    vias = (
+        ViaSpan(name='through', start_layer='COMP', end_layer='LAY4',
+                 kind='through'),
+    )
+    return StackupSpec(layers=layers, source_path=None, is_default=True,
+                        vias=vias)
 
 
 def load_for_dataset(dataset_entry, registry=None) -> StackupSpec:

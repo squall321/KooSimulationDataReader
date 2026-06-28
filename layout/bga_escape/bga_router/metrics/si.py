@@ -227,10 +227,37 @@ def z0_variance_pct(routed_paths, grid, rules_by_net: dict,
 
 
 def via_stub_length_mm(path, grid, rule, stackup: StackupSpec) -> float:
-    """Back-drill / stub-length information is not in the stackup yet.
-    Returns 0.0 as a documented stub. Phase D (full stackup with via
-    spans) will fill this in."""
-    return 0.0
+    """Sum of un-used via barrel length (back-drill candidate) across all
+    vias in this path. For each layer transition, look up the declared
+    via span in the stackup and subtract the actually-used span.
+
+    Resolution rule (Phase D-4):
+      1. If rule.via_type names a ViaSpan, use it.
+      2. Else if exactly one via is declared, use it.
+      3. Else use 'through' (full stack).
+    Returns 0.0 when stackup has no via declarations.
+    """
+    if not stackup.vias:
+        return 0.0
+    via = None
+    via_type_name = getattr(rule, 'via_type', None) if rule else None
+    if via_type_name:
+        via = stackup.via_by_name(via_type_name)
+    if via is None and len(stackup.vias) == 1:
+        via = stackup.vias[0]
+    if via is None:
+        via = stackup.via_by_name('through')
+    if via is None:
+        return 0.0
+    total = 0.0
+    prev_layer = None
+    for layer, _ix, _iy in path:
+        if prev_layer is not None and prev_layer != layer:
+            stub = stackup.stub_length_for_via(via, prev_layer, layer)
+            if stub is not None:
+                total += stub
+        prev_layer = layer
+    return total
 
 
 # Bulk copper resistivity at 20 °C (ohm·mm)
