@@ -110,23 +110,39 @@ all_paths, grid, stackup) -> dict[str, RuleCheckResult]`
 - [x] Property test: Z0 monotonic with w (narrower → higher Z0)
 - [x] DDR4 pass/fail: feed in a known-good DQ trace, must pass
 
-## Phase D — EM queue hooks (NOT inline) — DEFERRED to next PR
+## Phase D — EM queue hooks + extension backlog (COMPLETED)
 
-- [ ] `em_queue` block in output JSON listing (net, region_bbox, layers)
+- [x] `em_queue` block in output JSON listing (net, region_bbox, layers)
       for nets that failed `impedance_target_ok` or have
-      `z0_formula_marginal: true`
-- [ ] Document downstream consumption: `simulation/sol_d_cross_section/`
-      can read the queue and run per-net
+      `z0_formula_marginal: true` (Phase D-1, commit 7c9b0a7)
+- [x] Document downstream consumption: `simulation/sol_d_cross_section/`
+      can read the queue and run per-net (Phase D-5 em-dispatch CLI,
+      commit 10dfe37)
+- [x] `check_topology` star/tee 분기 추가 (Phase D-2, commit 8e3fbe8)
+- [x] Auto-plane detection from matrix file (Phase D-3, commit eca2a94)
+- [x] Via stub length — stackup ViaSpan 스키마 (Phase D-4, commit 4476594)
+- [x] PG via metadata 자동 도출 (Phase D-6, commit 29f0b81)
+- [x] `check_width` 채널 fit 검증 (Phase D-7, commit f844ae9)
 
 ## CLI
 
-- [ ] `route` / `eval` accept `--checks=geometry,rule_check,si,standard`
-      (default: all) — DEFERRED, all checks always on right now
+- [x] `route` accepts `--checks=geometry,cross_net,rule_check,si,
+      standard,em_queue,return_path` (Phase D, commit 378aa8a). Default all on.
 - [x] `route` accepts `--stackup <path/to/stackup.yaml>` override
 - [x] `route` accepts `--plane-layers <name1,name2>` override
+- [x] `em-dispatch` 서브명령 추가 (Phase D-5)
 - [ ] Aggregator gains `routed_ratio_with_rule_pass` column
       (= routed AND rule_check.violations == 0) — DEFERRED.
       Added Length/Sharp/RuleViol/Z0var/Std columns instead.
+
+## Architecture-change backlog (한 PR 스코프 밖)
+
+- [ ] Multi-pin nets (true star/tee with 3+ routed loads) — router
+      2-pin 전제 자체 변경 필요.
+- [ ] Router-side per-segment width recording (현재 D-7은 channel-fit
+      간접 검증).
+- [ ] Router-side via_metadata 채움 (현재 D-6은 net 이름 휴리스틱
+      기반 eval-time 도출).
 
 ## Validation gate
 
