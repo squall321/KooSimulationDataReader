@@ -114,13 +114,14 @@ def build_markdown(records: list) -> str:
     for dataset in sorted(by_dataset):
         lines.append(f'## Dataset: `{dataset}`')
         lines.append('')
-        # Phase B/C additions: Length, Sharp, RuleViol, Z0var, Std.
-        lines.append('| BGA | Recipe | Routed/Total | %  | Elapsed (s) | '
-                     'Vias | Iter | Length (mm) | Sharp | RuleViol | '
-                     'Z0var % | Std | Status |')
-        lines.append('|-----|--------|--------------|----|-------------|'
-                     '------|------|-------------|-------|----------|'
-                     '---------|-----|--------|')
+        # Phase B/C additions: Length, Sharp, RuleViol, Z0var, Std,
+        # RoutedClean% (Phase E-1).
+        lines.append('| BGA | Recipe | Routed/Total | %  | RoutedClean % | '
+                     'Elapsed (s) | Vias | Iter | Length (mm) | Sharp | '
+                     'RuleViol | Z0var % | Std | Status |')
+        lines.append('|-----|--------|--------------|----|---------------|'
+                     '-------------|------|------|-------------|-------|'
+                     '----------|---------|-----|--------|')
         rows = []
         for path, payload in by_dataset[dataset]:
             bga = payload['bga']
@@ -144,6 +145,12 @@ def build_markdown(records: list) -> str:
                 sharp = m.get('sharp_bends')
             rule_viol = rule_check.get('violations')
             z0var = si.get('Z0_variance_pct')
+            # Phase E-1: ratio of nets routed AND with zero rule_check
+            # violations. Approximation — rule_viol is design-level count,
+            # not per-net; treat 0 violations as "fully clean" and apply
+            # routed_ratio as the floor.
+            ratio = m.get('routed_ratio') or 0
+            clean_ratio = ratio if (rule_viol == 0) else 0.0
             # Compact standards summary: count passed/failed/null
             std_keys = ('ddr4_ok', 'pcie_gen3_ok', 'pcie_gen4_ok',
                          'usb32_ok', 'hdmi_ok', 'ethernet_ok')
@@ -157,6 +164,7 @@ def build_markdown(records: list) -> str:
             lines.append(
                 f"| {bga} | {recipe_name} | {routed}/{total} | "
                 f"{_fmt_ratio(m.get('routed_ratio'))} | "
+                f"{_fmt_ratio(clean_ratio)} | "
                 f"{_fmt_n(m.get('elapsed_s'))} | "
                 f"{_fmt_n(m.get('via_count'))} | "
                 f"{_fmt_n(m.get('iterations'))} | "
