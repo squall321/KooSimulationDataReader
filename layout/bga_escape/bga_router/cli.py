@@ -217,6 +217,29 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_em_run(args: argparse.Namespace) -> int:
+    from .integrations.sol_d_runner import dispatch_run, summarize_run
+    results = dispatch_run(
+        args.tasks_dir,
+        em_data_json=args.em_data,
+        output_dir=args.output_dir,
+        dry_run=args.dry_run,
+        timeout_s=args.timeout,
+    )
+    summary = summarize_run(results)
+    mode = 'DRY-RUN' if args.dry_run else 'EXEC'
+    print(f"[em-run] {mode}: total={summary['total']} "
+          f"executed={summary['executed']} ok={summary['ok']} "
+          f"failed={summary['failed']} skipped={summary['skipped']}")
+    if args.dry_run:
+        for r in results[:3]:
+            import shlex
+            print('  $ ' + ' '.join(shlex.quote(c) for c in r.cmd))
+        if len(results) > 3:
+            print(f'  ... and {len(results) - 3} more')
+    return 0 if summary['failed'] == 0 else 1
+
+
 def _emit(payload, output_path):
     if output_path:
         p = Path(output_path)
@@ -332,6 +355,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_em.add_argument('--out', required=True,
                        help='Output directory for per-net task JSONs.')
     p_em.set_defaults(func=cmd_em_dispatch)
+
+    # em-run — Phase E-4: dispatch per-task sol_d invocations
+    p_er = sub.add_parser('em-run',
+                            help='Run sol_d for each em-dispatch task.')
+    p_er.add_argument('--tasks-dir', required=True, dest='tasks_dir',
+                       help='Directory of em-dispatch task JSONs (from '
+                            '`em-dispatch --out`).')
+    p_er.add_argument('--em-data', default=None, dest='em_data',
+                       help='em_data.json input fed to sol_d (must be '
+                            'extracted separately via odb_to_em_json).')
+    p_er.add_argument('--output-dir', default=None, dest='output_dir',
+                       help='Where to put sol_d per-task output dirs.')
+    p_er.add_argument('--dry-run', action='store_true', dest='dry_run',
+                       help='Print commands instead of executing.')
+    p_er.add_argument('--timeout', type=int, default=600,
+                       help='Per-task timeout in seconds (default 600).')
+    p_er.set_defaults(func=cmd_em_run)
 
     return p
 
