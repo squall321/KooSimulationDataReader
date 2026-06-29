@@ -450,8 +450,33 @@ def run_recipe(grid, tasks: list, recipe: Recipe, *,
                 except Exception:
                     pass
     except Exception:
-        # bga_router not on sys.path (legacy callers); skip — eval will
-        # re-derive when needed.
+        pass
+
+    # Phase E-3 — populate PathResult.segment_widths_mm. Router treats
+    # width as a cost weight only and renders every same-layer segment
+    # uniformly at rule.width_mm. We record that explicit list now so
+    # downstream verifiers can stop assuming uniformity and future
+    # neck-down support drops in without ABI churn.
+    try:
+        rules_by_net = {t.net_name: t.rule for t in tasks}
+        for net_name, pr in routed.items():
+            if getattr(pr, 'segment_widths_mm', None):
+                continue
+            path = getattr(pr, 'path', None) or []
+            rule = rules_by_net.get(net_name)
+            w = getattr(rule, 'width_mm', None) if rule else None
+            if not w or w <= 0:
+                continue
+            # Count same-layer segments (each transition skipped)
+            n_segs = 0
+            prev = None
+            for layer, _ix, _iy in path:
+                if prev is not None and prev == layer:
+                    n_segs += 1
+                prev = layer
+            if n_segs > 0:
+                pr.segment_widths_mm = [float(w)] * n_segs
+    except Exception:
         pass
 
     return RecipeResult(

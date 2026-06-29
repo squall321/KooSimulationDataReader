@@ -59,6 +59,12 @@ class PathResult:
     # }
     # Populated by the path solver; safe default = empty list.
     via_metadata: list = field(default_factory=list)
+    # Phase E-3 — per-segment rendered width in mm. One entry per
+    # same-layer segment; via transitions are not present. Router
+    # currently treats width as a cost weight only and emits a uniform
+    # rule.width_mm for every segment, but the schema is here for
+    # future neck-down / variable-width support without ABI churn.
+    segment_widths_mm: list = field(default_factory=list)
 
 
 @dataclass
