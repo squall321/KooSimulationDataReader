@@ -129,14 +129,24 @@ def derive_via_metadata(path, grid, net_name: str) -> list:
 
 def collect_pg_via_xy(routed_paths, grid) -> list:
     """Aggregate (x, y) mm for every PG-net via across the design.
-    Used as input to summarize_return_path's power_ground_vias_xy arg."""
+
+    Phase E-2: prefer router-populated PathResult.via_metadata when
+    present; fall back to deriving from path + net name for legacy
+    callers / paths the router didn't tag.
+    """
     pts: list = []
     for net, pr in routed_paths.items():
         path = getattr(pr, 'path', None) if not isinstance(pr, list) else pr
         if not path or not is_power_ground_net(net):
             continue
-        for v in derive_via_metadata(path, grid, net):
-            pts.append(v['xy_mm'])
+        meta = getattr(pr, 'via_metadata', None) if not isinstance(pr, list) else None
+        if meta:
+            for v in meta:
+                if v.get('kind') == 'power_ground':
+                    pts.append(v.get('xy_mm'))
+        else:
+            for v in derive_via_metadata(path, grid, net):
+                pts.append(v['xy_mm'])
     return pts
 
 
