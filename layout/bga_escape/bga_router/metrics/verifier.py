@@ -183,6 +183,56 @@ def _path_segment_angles(path):
         yield math.degrees(math.acos(cosv))
 
 
+def check_width(path, grid, rule, *,
+                 same_net_cells: Optional[set] = None) -> Optional[bool]:
+    """Phase D-7 — verify declared rule.width_mm physically fits.
+
+    The router uses width_mm as a cost weight only; it never tracks
+    per-segment rendered width. So a verifier that compares "declared
+    vs router-recorded width" has nothing to compare. Instead we check
+    that each path cell has at least half_width of room (no OTHER-net
+    blocker within radius = ceil(width_mm/2/cell_mm)) on the same
+    layer.
+
+    Returns:
+        True  — every cell has the requested half-width clearance
+        False — at least one cell is in a channel too tight for the
+                declared width
+        None  — N/A (rule.width_mm not set, or path empty)
+    """
+    if not path or rule is None:
+        return None
+    width = getattr(rule, 'width_mm', None)
+    if not width or width <= 0:
+        return None
+    cell_mm = getattr(grid.geom, 'cell_mm', None)
+    if not cell_mm or cell_mm <= 0:
+        return None
+    # Required clearance from trace center → 1/2 width
+    radius_cells = int(math.ceil((width / 2) / cell_mm))
+    if radius_cells < 1:
+        return True  # sub-cell width — fits trivially
+    if same_net_cells is None:
+        same_net_cells = {(layer, ix, iy) for (layer, ix, iy) in path}
+    is_blocked = getattr(grid, 'is_blocked', None)
+    if is_blocked is None:
+        return None
+    for layer, ix, iy in path:
+        for dx in range(-radius_cells, radius_cells + 1):
+            for dy in range(-radius_cells, radius_cells + 1):
+                if dx == 0 and dy == 0:
+                    continue
+                nbr = (layer, ix + dx, iy + dy)
+                if nbr in same_net_cells:
+                    continue
+                try:
+                    if is_blocked(layer, ix + dx, iy + dy):
+                        return False
+                except Exception:
+                    pass
+    return True
+
+
 def check_bend_class(path, rule) -> Optional[bool]:
     """Verify bend angles against rule.bend_class.
 
@@ -628,6 +678,7 @@ def verify_all(routed_paths: dict, tasks: list, grid, spec,
     per_check_violators = {
         'layers_membership_ok': [],
         'escape_side_ok': [],
+        'width_ok': [],
         'via_budget_ok': [],
         'min_length_ok': [],
         'bend_class_ok': [],
@@ -661,6 +712,13 @@ def verify_all(routed_paths: dict, tasks: list, grid, spec,
             src_xy = _endpoint_xy(task.source, grid)
             if not check_escape_side(path, src_xy, rule):
                 per_check_violators['escape_side_ok'].append(net)
+
+        # width — Phase D-7: physical channel fit
+        w = check_width(path, grid, rule)
+        if w is not None:
+            per_check_na['width_ok'] = False
+            if not w:
+                per_check_violators['width_ok'].append(net)
 
         # via_budget
         if rule.max_via_count is not None:
