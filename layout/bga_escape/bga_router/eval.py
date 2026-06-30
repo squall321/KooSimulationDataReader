@@ -387,6 +387,13 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['bus_groups'] = f'{type(e).__name__}: {e}'
 
+    # Phase F-1 — per-pair coupling matrix
+    try:
+        from bga_router.metrics.coupling import summarize_coupling
+        metrics['coupling'] = summarize_coupling(routed_paths, grid)
+    except Exception as e:
+        phase_c_errors['coupling'] = f'{type(e).__name__}: {e}'
+
     # Phase D — EM queue hook (marginal Z0 / impedance miss → solver)
     if _on('em_queue'):
         try:
