@@ -394,6 +394,16 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['coupling'] = f'{type(e).__name__}: {e}'
 
+    # Phase F-5 — net cluster auto-classification (signal domain)
+    try:
+        from bga_router.metrics.net_clusters import summarize_net_clusters
+        rbn_for_cluster = {t.net_name: t.rule for t in tasks}
+        metrics['net_clusters'] = summarize_net_clusters(
+            list(routed_paths.keys()),
+            rules_by_net=rbn_for_cluster)
+    except Exception as e:
+        phase_c_errors['net_clusters'] = f'{type(e).__name__}: {e}'
+
     # Phase D — EM queue hook (marginal Z0 / impedance miss → solver)
     if _on('em_queue'):
         try:
