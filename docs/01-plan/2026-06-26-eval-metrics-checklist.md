@@ -135,14 +135,15 @@ all_paths, grid, stackup) -> dict[str, RuleCheckResult]`
       (= routed AND rule_check.violations == 0) — DEFERRED.
       Added Length/Sharp/RuleViol/Z0var/Std columns instead.
 
-## Architecture-change backlog (한 PR 스코프 밖)
+## Architecture-change backlog — Phase E 처리됨
 
-- [ ] Multi-pin nets (true star/tee with 3+ routed loads) — router
-      2-pin 전제 자체 변경 필요.
-- [ ] Router-side per-segment width recording (현재 D-7은 channel-fit
-      간접 검증).
-- [ ] Router-side via_metadata 채움 (현재 D-6은 net 이름 휴리스틱
-      기반 eval-time 도출).
+- [x] Router-side per-segment width recording (Phase E-3, commit ab92a34)
+- [x] Router-side via_metadata 채움 (Phase E-2, commit 9e04d33)
+- [~] Multi-pin nets — scaffold + design doc만 (Phase E-5, commit
+      9358d66). 진짜 implementation은 Stage 1-5 별도 PR sequence.
+      docs/01-plan/2026-06-29-multi-pin-router-design.md 참조.
+- [x] Aggregator routed_ratio_with_rule_pass 컬럼 (Phase E-1, commit 2b549ac)
+- [x] sol_d em-dispatch task 자동 수신 (Phase E-4, commit 610eb99)
 
 ## Validation gate
 
