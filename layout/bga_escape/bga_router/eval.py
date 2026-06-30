@@ -379,6 +379,14 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
         except Exception as e:
             phase_c_errors['summarize_return_path'] = f'{type(e).__name__}: {e}'
 
+    # Phase F-2 — bus group auto-detect from net names
+    try:
+        from bga_router.metrics.bus_groups import summarize_bus_groups
+        net_names = list(routed_paths.keys())
+        metrics['bus_groups'] = summarize_bus_groups(net_names)
+    except Exception as e:
+        phase_c_errors['bus_groups'] = f'{type(e).__name__}: {e}'
+
     # Phase D — EM queue hook (marginal Z0 / impedance miss → solver)
     if _on('em_queue'):
         try:
