@@ -230,7 +230,11 @@ def cmd_net_diff(args: argparse.Namespace) -> int:
 
 
 def cmd_em_run(args: argparse.Namespace) -> int:
-    from .integrations.sol_d_runner import dispatch_run, summarize_run
+    from .integrations.sol_d_runner import summarize_run
+    if getattr(args, 'solver', 'sol_d') == 'sol_b':
+        from .integrations.sol_b_runner import dispatch_run
+    else:
+        from .integrations.sol_d_runner import dispatch_run
     results = dispatch_run(
         args.tasks_dir,
         em_data_json=args.em_data,
@@ -240,11 +244,13 @@ def cmd_em_run(args: argparse.Namespace) -> int:
     )
     summary = summarize_run(results)
     mode = 'DRY-RUN' if args.dry_run else 'EXEC'
-    print(f"[em-run] {mode}: total={summary['total']} "
+    print(f"[em-run:{args.solver}] {mode}: total={summary['total']} "
           f"executed={summary['executed']} ok={summary['ok']} "
           f"failed={summary['failed']} skipped={summary['skipped']}")
     if args.dry_run:
         for r in results[:3]:
+            if not r.cmd:
+                continue
             import shlex
             print('  $ ' + ' '.join(shlex.quote(c) for c in r.cmd))
         if len(results) > 3:
@@ -383,6 +389,11 @@ def build_parser() -> argparse.ArgumentParser:
                        help='Print commands instead of executing.')
     p_er.add_argument('--timeout', type=int, default=600,
                        help='Per-task timeout in seconds (default 600).')
+    p_er.add_argument('--solver', default='sol_d',
+                       choices=['sol_d', 'sol_b'],
+                       help='Which solver to invoke (default sol_d). '
+                            'sol_b routes only tasks whose '
+                            'suggested_solver is sol_b.')
     p_er.set_defaults(func=cmd_em_run)
 
     # net-diff — Phase F-4: two eval results → per-net markdown diff
