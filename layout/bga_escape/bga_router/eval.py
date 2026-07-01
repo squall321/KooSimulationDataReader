@@ -404,6 +404,15 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['net_clusters'] = f'{type(e).__name__}: {e}'
 
+    # Phase F-3 — driver/load dependency graph
+    try:
+        from bga_router.metrics.dependency_graph import summarize_dependencies
+        rbn_for_dep = {t.net_name: t.rule for t in tasks}
+        metrics['dependencies'] = summarize_dependencies(
+            list(routed_paths.keys()), rbn_for_dep, routed_paths, grid)
+    except Exception as e:
+        phase_c_errors['dependencies'] = f'{type(e).__name__}: {e}'
+
     # Phase D — EM queue hook (marginal Z0 / impedance miss → solver)
     if _on('em_queue'):
         try:
