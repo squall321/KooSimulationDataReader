@@ -217,6 +217,13 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_spice_export(args: argparse.Namespace) -> int:
+    from .integrations.spice_export import write_spice_lib
+    out = write_spice_lib(args.input, args.output, subckt_prefix=args.prefix)
+    print(f'[spice-export] wrote {out}')
+    return 0
+
+
 def cmd_net_diff(args: argparse.Namespace) -> int:
     from .metrics.net_diff import compare_results, render_markdown
     a = json.loads(Path(args.a).read_text())
@@ -406,6 +413,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_nd.add_argument('--top-k', type=int, default=10,
                        help='Top-K biggest deltas per section.')
     p_nd.set_defaults(func=cmd_net_diff)
+
+    # spice-export — Phase G-2: eval JSON → SPICE .lib
+    p_sp = sub.add_parser('spice-export',
+                            help='Export a SPICE .lib from a route JSON.')
+    p_sp.add_argument('--input', required=True, help='Route JSON path.')
+    p_sp.add_argument('--output', required=True, help='Output .lib path.')
+    p_sp.add_argument('--prefix', default='NET_',
+                       help='SUBCKT name prefix (default NET_).')
+    p_sp.set_defaults(func=cmd_spice_export)
 
     return p
 
