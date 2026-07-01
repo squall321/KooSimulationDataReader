@@ -217,6 +217,18 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_net_diff(args: argparse.Namespace) -> int:
+    from .metrics.net_diff import compare_results, render_markdown
+    a = json.loads(Path(args.a).read_text())
+    b = json.loads(Path(args.b).read_text())
+    diff = compare_results(a, b,
+                             recipe_a=a.get('recipe'),
+                             recipe_b=b.get('recipe'))
+    md = render_markdown(diff, top_k=args.top_k)
+    _emit_text(md, args.output)
+    return 0
+
+
 def cmd_em_run(args: argparse.Namespace) -> int:
     from .integrations.sol_d_runner import dispatch_run, summarize_run
     results = dispatch_run(
@@ -372,6 +384,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_er.add_argument('--timeout', type=int, default=600,
                        help='Per-task timeout in seconds (default 600).')
     p_er.set_defaults(func=cmd_em_run)
+
+    # net-diff — Phase F-4: two eval results → per-net markdown diff
+    p_nd = sub.add_parser('net-diff',
+                            help='Per-net diff between two route JSONs.')
+    p_nd.add_argument('--a', required=True, help='Result JSON A path.')
+    p_nd.add_argument('--b', required=True, help='Result JSON B path.')
+    p_nd.add_argument('--output', default=None,
+                       help='Output markdown path (stdout if omitted).')
+    p_nd.add_argument('--top-k', type=int, default=10,
+                       help='Top-K biggest deltas per section.')
+    p_nd.set_defaults(func=cmd_net_diff)
 
     return p
 
