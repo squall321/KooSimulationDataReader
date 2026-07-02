@@ -592,6 +592,41 @@ def check_shield_present(path, routed_paths, rules_by_net, rule, grid
     return True
 
 
+def check_multi_pin_coverage(task, routed_paths) -> Optional[bool]:
+    """Phase G-5 — verify router covered every extra pin of a multi-pin net.
+
+    task.extra_pins carries the full endpoint list (from net_extractor).
+    Router decomposed into 2-pin sub-tasks; check the union of those
+    sub-tasks' endpoints covers every declared pin.
+
+    Returns:
+      None — task has no extra_pins (2-pin net or downstream task)
+      True — every extra pin's (layer,ix,iy) is present in some sub-path
+      False — at least one declared pin has no matching cell in any sub-path
+    """
+    extras = getattr(task, 'extra_pins', None)
+    if not extras:
+        return None
+    # Aggregate every routed cell across all sub-paths for this net.
+    net = task.net_name
+    covered_cells: set = set()
+    for name, pr in routed_paths.items():
+        if name != net:
+            continue
+        path = getattr(pr, 'path', None) or []
+        for cell in path:
+            covered_cells.add(tuple(cell))
+    if not covered_cells:
+        return False
+    for ep in extras:
+        cell = (getattr(ep, 'layer', None),
+                 getattr(ep, 'ix', None),
+                 getattr(ep, 'iy', None))
+        if cell not in covered_cells:
+            return False
+    return True
+
+
 def _path_adjacency(path):
     """Build undirected adjacency dict from consecutive cells."""
     adj: dict = {}
@@ -688,6 +723,7 @@ def verify_all(routed_paths: dict, tasks: list, grid, spec,
         'impedance_target_ok': [],
         'shield_present_ok': [],
         'topology_ok': [],
+        'multi_pin_coverage_ok': [],
     }
     per_check_na = {k: True for k in per_check_violators}
     per_check_notes: dict = {k: '' for k in per_check_violators}
@@ -790,6 +826,13 @@ def verify_all(routed_paths: dict, tasks: list, grid, spec,
             if rule.shield_required:
                 per_check_notes['shield_present_ok'] = (
                     'N/A: no PG nets in routed_paths')
+
+        # multi-pin coverage — Phase G-5
+        mp = check_multi_pin_coverage(task, routed_paths)
+        if mp is not None:
+            per_check_na['multi_pin_coverage_ok'] = False
+            if not mp:
+                per_check_violators['multi_pin_coverage_ok'].append(net)
 
         # topology — daisy_chain / star / tee 모두 검증 (Phase D-2).
         topo = check_topology(path, rule)

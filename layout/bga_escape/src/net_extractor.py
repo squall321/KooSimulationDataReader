@@ -500,12 +500,19 @@ def extract_routing_tasks(
                     continue
             else:
                 segments = _decompose_daisy_chain(endpoints_built)
-            for src_ep, snk_ep in segments:
+            # Phase G-5 — Stage 1 data layer: attach the full endpoint
+            # tuple to the FIRST sub-task via extra_pins so downstream
+            # tools (verifier / dependency_graph / standards) can see
+            # the true multi-pin cardinality without reconstructing it.
+            # Router itself still consumes source/sink of each sub-task.
+            extras_tuple = tuple(endpoints_built)
+            for i, (src_ep, snk_ep) in enumerate(segments):
                 tasks.append(RoutingTask(
                     net_name=net_name,
                     source=src_ep,
                     sink=snk_ep,
                     rule=rule,
+                    extra_pins=extras_tuple if i == 0 else None,
                 ))
 
     # 3. Diff-pair linking.
