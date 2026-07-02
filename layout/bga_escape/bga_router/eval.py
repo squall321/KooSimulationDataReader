@@ -437,6 +437,15 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['dependencies'] = f'{type(e).__name__}: {e}'
 
+    # Phase H-3 — HDI micro-via DRC
+    try:
+        from bga_router.metrics.hdi_drc import summarize_hdi_drc
+        rbn_for_hdi = {t.net_name: t.rule for t in tasks}
+        metrics['hdi_drc'] = summarize_hdi_drc(
+            routed_paths, stackup, rbn_for_hdi)
+    except Exception as e:
+        phase_c_errors['hdi_drc'] = f'{type(e).__name__}: {e}'
+
     # Phase G-4 — driver_pin ↔ net_name resolver
     try:
         from bga_router.metrics.driver_resolver import (
