@@ -242,9 +242,27 @@ def cmd_em_run(args: argparse.Namespace) -> int:
         from .integrations.sol_b_runner import dispatch_run
     else:
         from .integrations.sol_d_runner import dispatch_run
+    # Phase H-1: auto-generate em_data.json if missing
+    em_data = args.em_data
+    if (getattr(args, 'auto_em_data', False)
+            and em_data
+            and not Path(em_data).exists()):
+        from .integrations.em_data_builder import build_em_data
+        odb = args.odb
+        stack = args.stackup_yaml
+        if not odb or not stack:
+            print('[em-run] --auto-em-data requires --odb and --stackup-yaml')
+            return 2
+        try:
+            out = build_em_data(odb_dir=odb, stackup_yaml=stack,
+                                  output=em_data)
+            print(f'[em-run] auto-generated em_data: {out}')
+        except Exception as e:
+            print(f'[em-run] auto-build failed: {type(e).__name__}: {e}')
+            return 2
     results = dispatch_run(
         args.tasks_dir,
-        em_data_json=args.em_data,
+        em_data_json=em_data,
         output_dir=args.output_dir,
         dry_run=args.dry_run,
         timeout_s=args.timeout,
@@ -401,6 +419,19 @@ def build_parser() -> argparse.ArgumentParser:
                        help='Which solver to invoke (default sol_d). '
                             'sol_b routes only tasks whose '
                             'suggested_solver is sol_b.')
+    # Phase H-1 — auto-build em_data.json if missing
+    p_er.add_argument('--auto-em-data', action='store_true',
+                       dest='auto_em_data',
+                       help='Auto-generate em_data.json from ODB++ '
+                            'via odb_to_em_json when --em-data is '
+                            'missing or the file does not exist.')
+    p_er.add_argument('--odb', default=None,
+                       help='ODB++ path for --auto-em-data (default: '
+                            'registered dataset path from first task '
+                            'origin.dataset).')
+    p_er.add_argument('--stackup-yaml', default=None,
+                       dest='stackup_yaml',
+                       help='Stackup YAML for --auto-em-data (required).')
     p_er.set_defaults(func=cmd_em_run)
 
     # net-diff — Phase F-4: two eval results → per-net markdown diff
