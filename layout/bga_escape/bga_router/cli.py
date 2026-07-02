@@ -217,6 +217,24 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sim_agg(args: argparse.Namespace) -> int:
+    from .integrations.sim_aggregator import summarize_sim_aggregation
+    data = json.loads(Path(args.eval).read_text())
+    agg = summarize_sim_aggregation(data, args.sim_dir,
+                                       tasks_dir=args.tasks_dir)
+    data.setdefault('metrics', {}).setdefault('si', {})
+    data['metrics']['si']['simulated'] = agg
+    out = Path(args.output or args.eval)
+    out.write_text(json.dumps(data, indent=2, default=str))
+    print(f"[sim-agg] merged {agg['net_count']} nets → {out}")
+    if agg['biggest_delta']:
+        print(f"  biggest analytical↔simulated Δ:")
+        for e in agg['biggest_delta']:
+            print(f"    {e['net']}: {e['analytical_z0_ohm']:.2f}Ω vs "
+                  f"{e['simulated_z0_ohm']:.2f}Ω ({e['delta_pct']:+.2f}%)")
+    return 0
+
+
 def cmd_spice_export(args: argparse.Namespace) -> int:
     from .integrations.spice_export import write_spice_lib
     out = write_spice_lib(args.input, args.output, subckt_prefix=args.prefix)
@@ -453,6 +471,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_sp.add_argument('--prefix', default='NET_',
                        help='SUBCKT name prefix (default NET_).')
     p_sp.set_defaults(func=cmd_spice_export)
+
+    # sim-agg — Phase H-4: sol_d/sol_b output → merge into eval JSON
+    p_sa = sub.add_parser('sim-agg',
+                            help='Aggregate solver output back into eval JSON.')
+    p_sa.add_argument('--eval', required=True,
+                       help='Original eval JSON path.')
+    p_sa.add_argument('--sim-dir', required=True, dest='sim_dir',
+                       help='Root of sol_d/sol_b per-task outputs.')
+    p_sa.add_argument('--tasks-dir', default=None, dest='tasks_dir',
+                       help='em-dispatch tasks dir (for task_id → net map).')
+    p_sa.add_argument('--output', default=None,
+                       help='Output JSON path (overwrites --eval if omitted).')
+    p_sa.set_defaults(func=cmd_sim_agg)
 
     return p
 
