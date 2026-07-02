@@ -145,6 +145,7 @@ def evaluate_recipe(
                 'routed_paths': result.routed_paths,
                 'tasks': tasks,
                 'spec': context.spec,
+                'eda': context.eda,
             }
         return out
     except _TO:

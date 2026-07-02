@@ -437,6 +437,18 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['dependencies'] = f'{type(e).__name__}: {e}'
 
+    # Phase G-4 — driver_pin ↔ net_name resolver
+    try:
+        from bga_router.metrics.driver_resolver import (
+            summarize_driver_resolution)
+        rbn_for_drv = {t.net_name: t.rule for t in tasks}
+        eda = internals.get('eda')
+        components = getattr(eda, 'components', []) if eda else []
+        metrics['driver_resolution'] = summarize_driver_resolution(
+            rbn_for_drv, components)
+    except Exception as e:
+        phase_c_errors['driver_resolution'] = f'{type(e).__name__}: {e}'
+
     # Phase D — EM queue hook (marginal Z0 / impedance miss → solver)
     if _on('em_queue'):
         try:
