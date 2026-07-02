@@ -145,12 +145,15 @@ def build_markdown(records: list) -> str:
                 sharp = m.get('sharp_bends')
             rule_viol = rule_check.get('violations')
             z0var = si.get('Z0_variance_pct')
-            # Phase E-1: ratio of nets routed AND with zero rule_check
-            # violations. Approximation — rule_viol is design-level count,
-            # not per-net; treat 0 violations as "fully clean" and apply
-            # routed_ratio as the floor.
+            # Phase G-3: prefer per-net breakdown when available.
+            #   clean_ratio = 1 - (nets_with_violation / total)
+            nets_with_viol = rule_check.get('nets_with_violation')
+            total_n = m.get('total') or 0
             ratio = m.get('routed_ratio') or 0
-            clean_ratio = ratio if (rule_viol == 0) else 0.0
+            if nets_with_viol is not None and total_n > 0:
+                clean_ratio = max(0.0, ratio - nets_with_viol / total_n)
+            else:
+                clean_ratio = ratio if (rule_viol == 0) else 0.0
             # Compact standards summary: count passed/failed/null
             std_keys = ('ddr4_ok', 'pcie_gen3_ok', 'pcie_gen4_ok',
                          'usb32_ok', 'hdmi_ok', 'ethernet_ok')

@@ -331,15 +331,39 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
             rc = verify_all(routed_paths, tasks, grid, spec=spec,
                              stackup=stackup, plane_geom=plane_geom)
             by_field_serialized = {}
+            # Phase G-3 — per-net violation count instead of design-level 1.
+            # For each field, add the number of violator nets to the total.
+            per_net_violation_count: Dict[str, int] = {}
+            expanded_total = 0
             for fname, r in rc['by_field'].items():
+                violators_list = list(r.violators)
                 by_field_serialized[fname] = {
                     'pass':      bool(r.passed),
-                    'violators': list(r.violators),
+                    'violators': violators_list,
+                    'violator_count': len(violators_list),
                     'note':      r.note,
                 }
+                # per-field expanded contribution
+                expanded_total += len(violators_list)
+                for net in violators_list:
+                    per_net_violation_count[net] = (
+                        per_net_violation_count.get(net, 0) + 1)
+            # by_net breakdown — sorted descending by count for reporting
+            by_net = [
+                {'net': n, 'violation_count': c,
+                  'fields': sorted(
+                      f for f, e in by_field_serialized.items()
+                      if n in e['violators'])}
+                for n, c in sorted(per_net_violation_count.items(),
+                                     key=lambda kv: (-kv[1], kv[0]))
+            ]
             metrics['rule_check'] = {
-                'violations': rc['violations'],
-                'by_field':   by_field_serialized,
+                'violations':          rc['violations'],
+                # Phase G-3 additions
+                'violations_expanded': expanded_total,
+                'violations_by_net':   by_net,
+                'nets_with_violation': len(per_net_violation_count),
+                'by_field':            by_field_serialized,
             }
         except Exception as e:
             phase_b_errors['verify_all'] = f'{type(e).__name__}: {e}'
