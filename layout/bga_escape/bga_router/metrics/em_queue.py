@@ -103,6 +103,8 @@ def build_em_queue(routed_paths, grid, rules_by_net: Dict[str, Any],
             reasons.append('tight_coupling')
         if flags.get('thin_dielectric'):
             reasons.append('thin_dielectric')
+        if flags.get('stripline_wh_bias'):
+            reasons.append('stripline_wh_bias')          # Phase H-2
         if net in imp_violators:
             reasons.append('impedance_miss')
 

@@ -282,9 +282,19 @@ def branch_dc_resistance_mohm(path, grid, rule, stackup: StackupSpec
 def is_marginal_formula(rule, stackup: StackupSpec, layer: str) -> Dict[str, bool]:
     h = _h_for_layer(stackup, layer) or 0.0
     s = getattr(rule, 'pair_gap_mm', None) if rule else None
+    w = getattr(rule, 'width_mm', None) if rule else None
     tight = bool(s and h > 0 and (s / h) < 0.5)
     thin = bool(h > 0 and h < 0.05)
-    return {'tight_coupling': tight, 'thin_dielectric': thin}
+    # Phase H-2 — stripline systematic bias flagged when w/h in [0.3, 0.7]
+    # (documented in test_wadell_validation.py). Signals that the eval
+    # Z0 may be off by >10% and Sol D should be preferred.
+    stripline_bias = False
+    if w and h > 0 and stackup.stripline_layer(layer):
+        wh = w / h
+        stripline_bias = 0.3 <= wh <= 0.7
+    return {'tight_coupling':      tight,
+             'thin_dielectric':     thin,
+             'stripline_wh_bias':   stripline_bias}
 
 
 # ---------------------------------------------------------------------------
