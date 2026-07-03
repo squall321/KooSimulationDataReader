@@ -217,6 +217,25 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_xtalk_sim(args: argparse.Namespace) -> int:
+    from .integrations.ngspice_runner import (ngspice_available,
+                                                  run_crosstalk_batch)
+    data = json.loads(Path(args.eval).read_text())
+    out = run_crosstalk_batch(data, args.lib,
+                                workdir=args.workdir, top_k=args.top_k)
+    avail = 'yes' if ngspice_available() else 'NO — netlists only'
+    print(f"[xtalk-sim] ngspice available: {avail}")
+    print(f"[xtalk-sim] pairs simulated: {out['pairs_simulated']} "
+          f"ok: {out['pairs_ok']}")
+    if out['worst_crosstalk_v'] is not None:
+        print(f"  worst near-end crosstalk: {out['worst_crosstalk_v']:.4f} V")
+    for r in out['results']:
+        status = 'OK' if r['ok'] else f"SKIP ({r['skip_reason']})"
+        print(f"  {r['aggressor']} → {r['victim']}: {status}  "
+              f"netlist={r['netlist_path']}")
+    return 0
+
+
 def cmd_sim_agg(args: argparse.Namespace) -> int:
     from .integrations.sim_aggregator import summarize_sim_aggregation
     data = json.loads(Path(args.eval).read_text())
@@ -484,6 +503,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_sa.add_argument('--output', default=None,
                        help='Output JSON path (overwrites --eval if omitted).')
     p_sa.set_defaults(func=cmd_sim_agg)
+
+    # xtalk-sim — Phase H-6: ngspice crosstalk batch on top coupling pairs
+    p_xt = sub.add_parser('xtalk-sim',
+                            help='ngspice crosstalk sim for top coupling pairs.')
+    p_xt.add_argument('--eval', required=True, help='Route JSON path.')
+    p_xt.add_argument('--lib', required=True,
+                       help='SPICE .lib from spice-export.')
+    p_xt.add_argument('--workdir', required=True,
+                       help='Directory for testbench netlists + outputs.')
+    p_xt.add_argument('--top-k', type=int, default=5, dest='top_k')
+    p_xt.set_defaults(func=cmd_xtalk_sim)
 
     return p
 
