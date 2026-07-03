@@ -437,6 +437,13 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['dependencies'] = f'{type(e).__name__}: {e}'
 
+    # Phase H-7 — DFT (test point coverage / AOI visibility)
+    try:
+        from bga_router.metrics.dft import summarize_dft
+        metrics['dft'] = summarize_dft(routed_paths, grid)
+    except Exception as e:
+        phase_c_errors['dft'] = f'{type(e).__name__}: {e}'
+
     # Phase H-3 — HDI micro-via DRC
     try:
         from bga_router.metrics.hdi_drc import summarize_hdi_drc
