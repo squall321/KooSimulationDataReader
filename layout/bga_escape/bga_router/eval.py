@@ -437,6 +437,15 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['dependencies'] = f'{type(e).__name__}: {e}'
 
+    # Phase H-10 — multi-pin Stage 2 (branched topology + arrival skew)
+    try:
+        from bga_router.metrics.multi_pin import summarize_multi_pin
+        mp = summarize_multi_pin(tasks, routed_paths, grid)
+        if mp.get('multi_pin_net_count'):
+            metrics['multi_pin'] = mp
+    except Exception as e:
+        phase_c_errors['multi_pin'] = f'{type(e).__name__}: {e}'
+
     # Phase H-9 — thermal / EMI first-order metrics
     try:
         from bga_router.metrics.thermal_emi import summarize_thermal_emi
