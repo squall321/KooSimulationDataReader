@@ -217,6 +217,13 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    from .integrations.dashboard import write_dashboard
+    out = write_dashboard(args.input, args.output)
+    print(f'[dashboard] wrote {out}')
+    return 0
+
+
 def cmd_xtalk_sim(args: argparse.Namespace) -> int:
     from .integrations.ngspice_runner import (ngspice_available,
                                                   run_crosstalk_batch)
@@ -514,6 +521,13 @@ def build_parser() -> argparse.ArgumentParser:
                        help='Directory for testbench netlists + outputs.')
     p_xt.add_argument('--top-k', type=int, default=5, dest='top_k')
     p_xt.set_defaults(func=cmd_xtalk_sim)
+
+    # dashboard — Phase H-8: eval JSON → single-file HTML
+    p_db = sub.add_parser('dashboard',
+                            help='Render an eval JSON to a standalone HTML.')
+    p_db.add_argument('--input', required=True, help='Route JSON path.')
+    p_db.add_argument('--output', required=True, help='Output HTML path.')
+    p_db.set_defaults(func=cmd_dashboard)
 
     return p
 
