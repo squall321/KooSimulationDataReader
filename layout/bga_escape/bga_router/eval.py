@@ -437,6 +437,15 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['dependencies'] = f'{type(e).__name__}: {e}'
 
+    # Phase H-9 — thermal / EMI first-order metrics
+    try:
+        from bga_router.metrics.thermal_emi import summarize_thermal_emi
+        rbn_for_te = {t.net_name: t.rule for t in tasks}
+        metrics['thermal_emi'] = summarize_thermal_emi(
+            routed_paths, grid, rbn_for_te, stackup=stackup)
+    except Exception as e:
+        phase_c_errors['thermal_emi'] = f'{type(e).__name__}: {e}'
+
     # Phase H-7 — DFT (test point coverage / AOI visibility)
     try:
         from bga_router.metrics.dft import summarize_dft
