@@ -163,6 +163,80 @@ def tool_spice_export(arguments: Dict[str, Any]) -> Dict[str, Any]:
     return {'lib_path': str(p), 'size_bytes': p.stat().st_size}
 
 
+def tool_dashboard(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    from .integrations.dashboard import write_dashboard
+    path = arguments.get('eval_path')
+    out = arguments.get('out_path')
+    if not path or not out:
+        raise ValueError('dashboard requires eval_path + out_path')
+    p = write_dashboard(path, out)
+    return {'html_path': str(p), 'size_bytes': p.stat().st_size,
+             'hint': 'file:// 로 브라우저에서 바로 열림 (inline data)'}
+
+
+def tool_sim_agg(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    from .integrations.sim_aggregator import summarize_sim_aggregation
+    eval_path = arguments.get('eval_path')
+    sim_dir = arguments.get('sim_dir')
+    if not eval_path or not sim_dir:
+        raise ValueError('sim_agg requires eval_path + sim_dir')
+    data = json.loads(Path(eval_path).read_text())
+    agg = summarize_sim_aggregation(data, sim_dir,
+                                       tasks_dir=arguments.get('tasks_dir'))
+    out_path = arguments.get('out_path') or eval_path
+    data.setdefault('metrics', {}).setdefault('si', {})
+    data['metrics']['si']['simulated'] = agg
+    Path(out_path).write_text(json.dumps(data, indent=2, default=str))
+    return {
+        'merged_path':    str(out_path),
+        'net_count':      agg['net_count'],
+        'biggest_delta':  agg['biggest_delta'],
+    }
+
+
+def tool_em_run(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    solver = arguments.get('solver', 'sol_d')
+    if solver == 'sol_b':
+        from .integrations.sol_b_runner import dispatch_run
+    else:
+        from .integrations.sol_d_runner import dispatch_run
+    from .integrations.sol_d_runner import summarize_run
+    tasks_dir = arguments.get('tasks_dir')
+    if not tasks_dir:
+        raise ValueError('em_run requires tasks_dir')
+    results = dispatch_run(
+        tasks_dir,
+        em_data_json=arguments.get('em_data'),
+        output_dir=arguments.get('output_dir'),
+        dry_run=bool(arguments.get('dry_run', True)),
+        timeout_s=int(arguments.get('timeout_s', 600)),
+    )
+    summary = summarize_run(results)
+    summary['solver'] = solver
+    summary['skipped_reasons'] = sorted(
+        {r.skip_reason for r in results if r.skipped and r.skip_reason})
+    return summary
+
+
+def tool_xtalk_sim(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    from .integrations.ngspice_runner import (ngspice_available,
+                                                  run_crosstalk_batch)
+    eval_path = arguments.get('eval_path')
+    lib = arguments.get('lib_path')
+    workdir = arguments.get('workdir')
+    if not eval_path or not lib or not workdir:
+        raise ValueError('xtalk_sim requires eval_path + lib_path + workdir')
+    data = json.loads(Path(eval_path).read_text())
+    out = run_crosstalk_batch(data, lib, workdir=workdir,
+                                top_k=int(arguments.get('top_k', 5)))
+    out['ngspice_available'] = ngspice_available()
+    # RunResult-free serializable form
+    out['results'] = [
+        {k: v for k, v in r.items()} if isinstance(r, dict) else r
+        for r in out['results']]
+    return out
+
+
 _TOOLS = {
     'register_dataset': {
         'fn': tool_register_dataset,
@@ -248,6 +322,71 @@ _TOOLS = {
                 'out_path':  {'type': 'string'},
             },
             'required': ['eval_path', 'out_path'],
+        },
+    },
+    'dashboard': {
+        'fn': tool_dashboard,
+        'description': 'Render a route result JSON to a standalone HTML '
+                        'dashboard (inline data, opens from file://).',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'eval_path': {'type': 'string'},
+                'out_path':  {'type': 'string'},
+            },
+            'required': ['eval_path', 'out_path'],
+        },
+    },
+    'sim_agg': {
+        'fn': tool_sim_agg,
+        'description': 'Fold sol_d/sol_b Touchstone results back into the '
+                        'eval JSON; computes analytical-vs-simulated Z0 '
+                        'delta per net.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'eval_path': {'type': 'string'},
+                'sim_dir':   {'type': 'string'},
+                'tasks_dir': {'type': 'string'},
+                'out_path':  {'type': 'string',
+                               'description': 'defaults to eval_path (in-place)'},
+            },
+            'required': ['eval_path', 'sim_dir'],
+        },
+    },
+    'em_run': {
+        'fn': tool_em_run,
+        'description': 'Dispatch em-dispatch task files to sol_d (2D-FD) or '
+                        'sol_b (3D PEEC). dry_run=true (default) builds '
+                        'commands without executing.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'tasks_dir':  {'type': 'string'},
+                'solver':     {'type': 'string', 'enum': ['sol_d', 'sol_b'],
+                                'default': 'sol_d'},
+                'em_data':    {'type': 'string'},
+                'output_dir': {'type': 'string'},
+                'dry_run':    {'type': 'boolean', 'default': True},
+                'timeout_s':  {'type': 'integer', 'default': 600},
+            },
+            'required': ['tasks_dir'],
+        },
+    },
+    'xtalk_sim': {
+        'fn': tool_xtalk_sim,
+        'description': 'Generate + run ngspice crosstalk testbenches for the '
+                        'top coupling pairs. Without ngspice installed, '
+                        'netlists are written and marked skipped.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'eval_path': {'type': 'string'},
+                'lib_path':  {'type': 'string'},
+                'workdir':   {'type': 'string'},
+                'top_k':     {'type': 'integer', 'default': 5},
+            },
+            'required': ['eval_path', 'lib_path', 'workdir'],
         },
     },
 }

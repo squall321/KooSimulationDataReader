@@ -35,11 +35,13 @@ def test_initialized_notification_returns_none():
     assert resp is None
 
 
-def test_tools_list_exposes_all_six():
+def test_tools_list_exposes_all_ten():
     resp = mcp_server._handle(_req('tools/list'))
     names = {t['name'] for t in resp['result']['tools']}
     assert names == {'register_dataset', 'route', 'get_metrics',
-                      'em_dispatch', 'net_diff', 'spice_export'}
+                      'em_dispatch', 'net_diff', 'spice_export',
+                      # Phase I-1 additions
+                      'dashboard', 'sim_agg', 'em_run', 'xtalk_sim'}
     # Every tool has a schema + description
     for t in resp['result']['tools']:
         assert t['inputSchema']['type'] == 'object'
@@ -146,3 +148,77 @@ def test_spice_export_tool(tmp_path):
     }))
     body = json.loads(resp['result']['content'][0]['text'])
     assert Path(body['lib_path']).exists()
+
+
+# ---------------------------------------------------------------------------
+# Phase I-1 tools
+# ---------------------------------------------------------------------------
+
+
+def _full_eval(tmp_path):
+    p = tmp_path / 'eval.json'
+    p.write_text(json.dumps({
+        'dataset': 'D', 'bga': 'B', 'recipe': 'R',
+        'metrics': {
+            'routed': 2, 'total': 2, 'routed_ratio': 1.0,
+            'geometry': {'total_length_mm': 10.0, 'sharp_bends': 1},
+            'rule_check': {'violations': 0, 'by_field': {}},
+            'si': {'Z0_single_ended_ohm': {'a': 50.0}},
+            'coupling': {'top_pairs': [
+                {'pair': ['a', 'b'], 'length_mm': 1.0}]},
+        }}))
+    return p
+
+
+def test_dashboard_tool(tmp_path):
+    src = _full_eval(tmp_path)
+    out = tmp_path / 'd.html'
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'dashboard',
+        'arguments': {'eval_path': str(src), 'out_path': str(out)},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    assert Path(body['html_path']).exists()
+
+
+def test_sim_agg_tool_no_sim_dir_graceful(tmp_path):
+    src = _full_eval(tmp_path)
+    out = tmp_path / 'merged.json'
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'sim_agg',
+        'arguments': {'eval_path': str(src),
+                       'sim_dir': str(tmp_path / 'empty_sim'),
+                       'out_path': str(out)},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    assert body['net_count'] == 0
+    merged = json.loads(out.read_text())
+    assert 'simulated' in merged['metrics']['si']
+
+
+def test_em_run_tool_dry_run(tmp_path):
+    tasks = tmp_path / 'tasks'
+    tasks.mkdir()
+    (tasks / 't.json').write_text(json.dumps({
+        'net': 'X', 'task_id': 'T1', 'suggested_solver': 'sol_d'}))
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'em_run',
+        'arguments': {'tasks_dir': str(tasks), 'dry_run': True},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    assert body['total'] == 1
+    assert body['solver'] == 'sol_d'
+
+
+def test_xtalk_sim_tool_writes_netlists(tmp_path):
+    src = _full_eval(tmp_path)
+    lib = tmp_path / 'x.lib'
+    lib.write_text('* lib')
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'xtalk_sim',
+        'arguments': {'eval_path': str(src), 'lib_path': str(lib),
+                       'workdir': str(tmp_path / 'wd'), 'top_k': 1},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    assert body['pairs_simulated'] == 1
+    assert 'ngspice_available' in body
