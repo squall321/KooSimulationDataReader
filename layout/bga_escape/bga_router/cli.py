@@ -217,6 +217,13 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_viewer(args: argparse.Namespace) -> int:
+    from .integrations.route_viewer import write_route_viewer
+    out = write_route_viewer(args.input, args.output)
+    print(f'[viewer] wrote {out}')
+    return 0
+
+
 def cmd_dashboard(args: argparse.Namespace) -> int:
     from .integrations.dashboard import write_dashboard
     out = write_dashboard(args.input, args.output)
@@ -528,6 +535,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_db.add_argument('--input', required=True, help='Route JSON path.')
     p_db.add_argument('--output', required=True, help='Output HTML path.')
     p_db.set_defaults(func=cmd_dashboard)
+
+    # viewer — Phase I-2: routed path Canvas viewer
+    p_vw = sub.add_parser('viewer',
+                            help='Interactive routed-path Canvas viewer HTML.')
+    p_vw.add_argument('--input', required=True, help='Route JSON path.')
+    p_vw.add_argument('--output', required=True, help='Output HTML path.')
+    p_vw.set_defaults(func=cmd_viewer)
 
     return p
 

@@ -35,13 +35,15 @@ def test_initialized_notification_returns_none():
     assert resp is None
 
 
-def test_tools_list_exposes_all_ten():
+def test_tools_list_exposes_all_eleven():
     resp = mcp_server._handle(_req('tools/list'))
     names = {t['name'] for t in resp['result']['tools']}
     assert names == {'register_dataset', 'route', 'get_metrics',
                       'em_dispatch', 'net_diff', 'spice_export',
                       # Phase I-1 additions
-                      'dashboard', 'sim_agg', 'em_run', 'xtalk_sim'}
+                      'dashboard', 'sim_agg', 'em_run', 'xtalk_sim',
+                      # Phase I-2
+                      'route_viewer'}
     # Every tool has a schema + description
     for t in resp['result']['tools']:
         assert t['inputSchema']['type'] == 'object'

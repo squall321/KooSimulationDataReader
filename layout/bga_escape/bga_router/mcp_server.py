@@ -163,6 +163,18 @@ def tool_spice_export(arguments: Dict[str, Any]) -> Dict[str, Any]:
     return {'lib_path': str(p), 'size_bytes': p.stat().st_size}
 
 
+def tool_route_viewer(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    from .integrations.route_viewer import write_route_viewer
+    path = arguments.get('eval_path')
+    out = arguments.get('out_path')
+    if not path or not out:
+        raise ValueError('route_viewer requires eval_path + out_path')
+    p = write_route_viewer(path, out)
+    return {'html_path': str(p), 'size_bytes': p.stat().st_size,
+             'hint': 'Canvas viewer — 레이어 토글 / net highlight / '
+                     'coupling pair / zoom-pan. file:// 안전.'}
+
+
 def tool_dashboard(arguments: Dict[str, Any]) -> Dict[str, Any]:
     from .integrations.dashboard import write_dashboard
     path = arguments.get('eval_path')
@@ -315,6 +327,20 @@ _TOOLS = {
         'fn': tool_spice_export,
         'description': 'Export a SPICE .lib (lumped RLC + K coupling) from a '
                         'route result JSON.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'eval_path': {'type': 'string'},
+                'out_path':  {'type': 'string'},
+            },
+            'required': ['eval_path', 'out_path'],
+        },
+    },
+    'route_viewer': {
+        'fn': tool_route_viewer,
+        'description': 'Interactive Canvas viewer of routed paths — layer '
+                        'toggle / net highlight / violation marks / coupling '
+                        'pair select / zoom-pan. Single HTML, file:// safe.',
         'inputSchema': {
             'type': 'object',
             'properties': {

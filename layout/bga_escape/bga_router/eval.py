@@ -514,6 +514,34 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
         except Exception as e:
             phase_c_errors['summarize_standards'] = f'{type(e).__name__}: {e}'
 
+    # Phase I-2 — persist routed paths as mm polylines so the viewer
+    # (and any downstream tool) can draw the actual copper without
+    # re-running the router. Grid cells → world mm per same-layer run.
+    try:
+        paths_mm: Dict[str, Any] = {}
+        for net, pr in routed_paths.items():
+            path = getattr(pr, 'path', None) or []
+            if not path:
+                continue
+            segs: list = []       # list of {layer, points: [[x,y],...]}
+            cur_layer = None
+            cur_pts: list = []
+            for layer, ix, iy in path:
+                x, y = grid.geom.cell_to_world(ix, iy)
+                if layer != cur_layer:
+                    if cur_pts:
+                        segs.append({'layer': cur_layer,
+                                      'points': cur_pts})
+                    cur_layer = layer
+                    cur_pts = []
+                cur_pts.append([round(x, 4), round(y, 4)])
+            if cur_pts:
+                segs.append({'layer': cur_layer, 'points': cur_pts})
+            paths_mm[net] = segs
+        metrics['paths_mm'] = paths_mm
+    except Exception as e:
+        phase_c_errors['paths_mm'] = f'{type(e).__name__}: {e}'
+
     if phase_b_errors:
         metrics['phase_b_errors'] = phase_b_errors
     if phase_c_errors:
