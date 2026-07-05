@@ -163,6 +163,19 @@ def tool_spice_export(arguments: Dict[str, Any]) -> Dict[str, Any]:
     return {'lib_path': str(p), 'size_bytes': p.stat().st_size}
 
 
+def tool_pdn(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    from .integrations.pdn_runner import summarize_pdn
+    eval_path = arguments.get('eval_path')
+    if not eval_path:
+        raise ValueError('pdn requires eval_path')
+    data = json.loads(Path(eval_path).read_text())
+    return summarize_pdn(
+        data,
+        em_data_json=arguments.get('em_data'),
+        output_dir=arguments.get('output_dir', 'pdn_out'),
+        dry_run=bool(arguments.get('dry_run', True)))
+
+
 def tool_route_viewer(arguments: Dict[str, Any]) -> Dict[str, Any]:
     from .integrations.route_viewer import write_route_viewer
     path = arguments.get('eval_path')
@@ -334,6 +347,22 @@ _TOOLS = {
                 'out_path':  {'type': 'string'},
             },
             'required': ['eval_path', 'out_path'],
+        },
+    },
+    'pdn': {
+        'fn': tool_pdn,
+        'description': 'DC IR-drop analysis for power/ground nets via the '
+                        'pdn_dc 2D solver. dry_run=true (default) lists PG '
+                        'nets + commands without executing.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'eval_path':  {'type': 'string'},
+                'em_data':    {'type': 'string'},
+                'output_dir': {'type': 'string', 'default': 'pdn_out'},
+                'dry_run':    {'type': 'boolean', 'default': True},
+            },
+            'required': ['eval_path'],
         },
     },
     'route_viewer': {

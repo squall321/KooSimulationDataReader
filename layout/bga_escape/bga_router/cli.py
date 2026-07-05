@@ -217,6 +217,26 @@ def cmd_em_dispatch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pdn(args: argparse.Namespace) -> int:
+    from .integrations.pdn_runner import summarize_pdn
+    data = json.loads(Path(args.eval).read_text())
+    out = summarize_pdn(data, em_data_json=args.em_data,
+                          output_dir=args.output_dir,
+                          dry_run=args.dry_run)
+    print(f"[pdn] PG nets: {out['pg_net_count']}")
+    if out.get('note'):
+        print(f"  note: {out['note']}")
+    for r in out.get('runs', []):
+        status = ('dry-run' if r['rc'] is None and not r['skipped']
+                   else 'skip: ' + str(r.get('skip_reason'))
+                   if r['skipped'] else f"rc={r['rc']}")
+        print(f"  {r['net']}: {status}")
+    if out.get('worst_ir_drop'):
+        w = out['worst_ir_drop']
+        print(f"  worst IR drop: {w['net']} {w['max_drop_mV']:.2f} mV")
+    return 0
+
+
 def cmd_viewer(args: argparse.Namespace) -> int:
     from .integrations.route_viewer import write_route_viewer
     out = write_route_viewer(args.input, args.output)
@@ -542,6 +562,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_vw.add_argument('--input', required=True, help='Route JSON path.')
     p_vw.add_argument('--output', required=True, help='Output HTML path.')
     p_vw.set_defaults(func=cmd_viewer)
+
+    # pdn — Phase I-3: PG net IR-drop via pdn_dc solver
+    p_pd = sub.add_parser('pdn',
+                            help='DC IR-drop for power/ground nets (pdn_dc).')
+    p_pd.add_argument('--eval', required=True, help='Route JSON path.')
+    p_pd.add_argument('--em-data', default=None, dest='em_data',
+                       help='em_data.json (from odb_to_em_json).')
+    p_pd.add_argument('--output-dir', default='pdn_out', dest='output_dir')
+    p_pd.add_argument('--dry-run', action='store_true', dest='dry_run')
+    p_pd.set_defaults(func=cmd_pdn)
 
     return p
 
