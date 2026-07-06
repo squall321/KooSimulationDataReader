@@ -379,6 +379,16 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
         except Exception as e:
             phase_c_errors['summarize_si'] = f'{type(e).__name__}: {e}'
 
+        # Phase I-5 — propagation delay (ps) + timing skew
+        try:
+            from bga_router.metrics.propagation import summarize_propagation
+            rbn_for_delay = {t.net_name: t.rule for t in tasks}
+            prop = summarize_propagation(routed_paths, grid,
+                                           rbn_for_delay, stackup)
+            metrics.setdefault('si', {})['propagation'] = prop
+        except Exception as e:
+            phase_c_errors['propagation'] = f'{type(e).__name__}: {e}'
+
     # Phase C — return-path metrics. PG vias + stitching vias derived
     # from path + net classification (Phase D-6).
     if _on('return_path'):
