@@ -65,16 +65,14 @@ def build_http_upstream(url: str, *, alias: str = DEFAULT_ALIAS,
     }
 
 
-def bridge_command() -> List[str]:
-    """stdio MCP를 HTTP로 노출하는 mcp-proxy 브리지 예시 커맨드.
+def bridge_command(port: int = 9040) -> List[str]:
+    """stdio MCP를 Streamable-HTTP로 노출하는 자체 브리지 실행 커맨드.
 
-    실제 배포 시: mcp-proxy가 설치돼 있어야 하고, cwd를 bga_escape로.
-    여기선 참고용 커맨드 문자열만 반환.
+    외부 의존(mcp-proxy 등) 없이 stdlib http.server만 사용. cwd를
+    bga_escape로 두고 실행하면 import 경로가 자동 해결된다. 노출 URL은
+    http://<host>:<port>/mcp/ 이며 build_http_upstream의 url과 일치시킨다.
     """
-    return [
-        'mcp-proxy', '--sse-port', '9040',
-        '--', 'python', '-m', 'bga_router.mcp_server',
-    ]
+    return ['python', '-m', 'bga_router.http_bridge', '--port', str(port)]
 
 
 def register_upstream(payload: Dict[str, Any], *,

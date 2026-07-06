@@ -51,5 +51,6 @@ def test_register_strips_underscore_keys(monkeypatch):
 
 def test_bridge_command_shape():
     cmd = gr.bridge_command()
-    assert 'mcp-proxy' in cmd
-    assert '-m' in cmd and 'bga_router.mcp_server' in cmd
+    # 자체 브리지 모듈을 실행 — 외부 mcp-proxy 의존 제거
+    assert '-m' in cmd and 'bga_router.http_bridge' in cmd
+    assert '9040' in cmd
