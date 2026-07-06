@@ -26,6 +26,15 @@ def _eval_with_paths():
                           {'layer': 'COMP',
                            'points': [[5.0, 1.0], [6.0, 1.0]]}],
             },
+            'overlay_mm': {
+                'pins': [{'net': 'netA', 'kind': 'source', 'layer': 'COMP',
+                           'xy': [0.0, 0.0]},
+                          {'net': 'netA', 'kind': 'sink', 'layer': 'COMP',
+                           'xy': [5.0, 0.0]}],
+                'vias': [{'net': 'netB', 'xy': [5.0, 1.0], 'kind': 'signal',
+                           'start_layer': 'LAY2', 'end_layer': 'COMP'}],
+                'keep_outs': [{'net': 'netA', 'bbox_mm': [2, 2, 4, 4]}],
+            },
             'rule_check': {'by_field': {
                 'width_ok': {'pass': False, 'violators': ['netB'],
                               'note': ''}}},
@@ -80,3 +89,43 @@ def test_write_route_viewer_creates_file(tmp_path):
 def test_render_empty_paths_graceful():
     html_text = render_route_viewer({'dataset': 'X', 'metrics': {}})
     assert '<canvas' in html_text
+
+
+# ---------------------------------------------------------------------------
+# Phase J-2 — overlay + zoom-to-net
+# ---------------------------------------------------------------------------
+
+
+def test_render_includes_overlay_data():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert '"overlay"' in html_text
+    assert '"pins"' in html_text
+    assert '"vias"' in html_text
+    assert '"keep_outs"' in html_text
+
+
+def test_render_overlay_toggles_present():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'ov-pins' in html_text
+    assert 'ov-vias' in html_text
+    assert 'ov-ko' in html_text
+
+
+def test_render_zoom_to_net_function():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'zoomToNet' in html_text
+    assert 'ondblclick' in html_text
+
+
+def test_render_drawoverlay_present():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'drawOverlay' in html_text
+
+
+def test_render_overlay_absent_still_valid():
+    """overlay_mm 없어도 뷰어는 정상 (빈 배열 fallback)."""
+    d = _eval_with_paths()
+    del d['metrics']['overlay_mm']
+    html_text = render_route_viewer(d)
+    assert '<canvas' in html_text
+    assert 'drawOverlay' in html_text

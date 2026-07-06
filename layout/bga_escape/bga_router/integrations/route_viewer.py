@@ -37,10 +37,12 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
     for e in (rule_check.get('by_field') or {}).values():
         violators.update(e.get('violators') or [])
 
+    overlay = m.get('overlay_mm') or {}
     payload = json.dumps({
         'paths':      paths,
         'violators':  sorted(violators),
         'top_pairs':  (coupling.get('top_pairs') or [])[:10],
+        'overlay':    overlay,
     }, default=str)
 
     return f"""<meta charset="utf-8">
@@ -63,8 +65,13 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
 </style>
 <div id="side">
   <h3>{dataset} / {bga}</h3>
+  <h3>Overlays</h3>
+  <div><label><input type="checkbox" id="ov-pins" checked> pins</label></div>
+  <div><label><input type="checkbox" id="ov-vias" checked> vias</label></div>
+  <div><label><input type="checkbox" id="ov-ko" checked> keep-outs</label></div>
   <h3>Layers</h3><div id="layers"></div>
-  <h3>Nets</h3><div id="nets"></div>
+  <h3>Nets <span style="font-weight:400;color:#888">(dbl-click = zoom)</span></h3>
+  <div id="nets"></div>
   <h3>Top coupling pairs</h3><div id="pairs"></div>
 </div>
 <div id="cv"><canvas id="c"></canvas></div>
@@ -106,6 +113,56 @@ function fit() {{
 }}
 function toPx(x, y) {{ return [x * scale + offX, -y * scale + offY]; }}
 
+const overlay = DATA.overlay || {{pins: [], vias: [], keep_outs: []}};
+let showPins = true, showVias = true, showKO = true;
+
+function _visibleForNet(net) {{
+  return !selected.size || selected.has(net);
+}}
+
+function drawOverlay() {{
+  // keep-out zones (behind markers)
+  if (showKO) {{
+    for (const ko of (overlay.keep_outs || [])) {{
+      if (!_visibleForNet(ko.net)) continue;
+      const [x0, y0, x1, y1] = ko.bbox_mm;
+      const [px0, py0] = toPx(x0, y0);
+      const [px1, py1] = toPx(x1, y1);
+      ctx.strokeStyle = '#ff9800';
+      ctx.setLineDash([4, 3]);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.min(px0, px1), Math.min(py0, py1),
+                     Math.abs(px1 - px0), Math.abs(py1 - py0));
+      ctx.setLineDash([]);
+    }}
+  }}
+  // vias (diamonds)
+  if (showVias) {{
+    for (const v of (overlay.vias || [])) {{
+      if (!_visibleForNet(v.net)) continue;
+      const [px, py] = toPx(v.xy[0], v.xy[1]);
+      ctx.fillStyle = v.kind === 'power_ground' ? '#4caf50' : '#e0e0e0';
+      ctx.beginPath();
+      ctx.moveTo(px, py - 4); ctx.lineTo(px + 4, py);
+      ctx.lineTo(px, py + 4); ctx.lineTo(px - 4, py);
+      ctx.closePath(); ctx.fill();
+    }}
+  }}
+  // pins (circles: source hollow, sink filled)
+  if (showPins) {{
+    for (const p of (overlay.pins || [])) {{
+      if (!_visibleForNet(p.net)) continue;
+      const [px, py] = toPx(p.xy[0], p.xy[1]);
+      ctx.beginPath();
+      ctx.arc(px, py, 3.5, 0, 2 * Math.PI);
+      ctx.strokeStyle = '#ffca28';
+      ctx.lineWidth = 1.5;
+      if (p.kind === 'sink') {{ ctx.fillStyle = '#ffca28'; ctx.fill(); }}
+      else ctx.stroke();
+    }}
+  }}
+}}
+
 function draw() {{
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (const net in DATA.paths) {{
@@ -127,7 +184,37 @@ function draw() {{
       ctx.globalAlpha = 1.0;
     }}
   }}
+  drawOverlay();
 }}
+
+function zoomToNet(net) {{
+  // bbox of this net's path points
+  let nx0 = 1e9, ny0 = 1e9, nx1 = -1e9, ny1 = -1e9;
+  for (const seg of (DATA.paths[net] || [])) {{
+    for (const [x, y] of seg.points) {{
+      if (x < nx0) nx0 = x; if (x > nx1) nx1 = x;
+      if (y < ny0) ny0 = y; if (y > ny1) ny1 = y;
+    }}
+  }}
+  if (nx1 < nx0) return;
+  const w = (nx1 - nx0) || 1, h = (ny1 - ny0) || 1;
+  scale = Math.min(canvas.width / w, canvas.height / h) * 0.6;
+  const cx = (nx0 + nx1) / 2, cy = (ny0 + ny1) / 2;
+  offX = canvas.width / 2 - cx * scale;
+  offY = canvas.height / 2 + cy * scale;
+  draw();
+}}
+
+// overlay toggles
+document.getElementById('ov-pins').onchange = e => {{
+  showPins = e.target.checked; draw();
+}};
+document.getElementById('ov-vias').onchange = e => {{
+  showVias = e.target.checked; draw();
+}};
+document.getElementById('ov-ko').onchange = e => {{
+  showKO = e.target.checked; draw();
+}};
 
 // --- side panel ---
 const layersDiv = document.getElementById('layers');
@@ -153,6 +240,7 @@ Object.keys(DATA.paths).sort().forEach(net => {{
     d.classList.toggle('sel');
     draw();
   }};
+  d.ondblclick = () => {{ zoomToNet(net); }};
   netsDiv.appendChild(d);
 }});
 

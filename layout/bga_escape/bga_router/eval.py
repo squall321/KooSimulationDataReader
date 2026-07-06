@@ -552,6 +552,38 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['paths_mm'] = f'{type(e).__name__}: {e}'
 
+    # Phase J-2 — overlay geometry for the viewer: pin endpoints, vias,
+    # keep-out zones. Lets the Canvas viewer draw markers over the copper.
+    try:
+        overlay: Dict[str, Any] = {'pins': [], 'vias': [], 'keep_outs': []}
+        for t in tasks:
+            for ep_kind, ep in (('source', t.source), ('sink', t.sink)):
+                x, y = grid.geom.cell_to_world(ep.ix, ep.iy)
+                overlay['pins'].append({
+                    'net': t.net_name, 'kind': ep_kind,
+                    'layer': ep.layer,
+                    'xy': [round(x, 4), round(y, 4)]})
+            ko = getattr(t.rule, 'keep_out_zones', ()) or ()
+            for zone in ko:
+                if len(zone) == 4:
+                    overlay['keep_outs'].append({
+                        'net': t.net_name,
+                        'bbox_mm': [round(v, 4) for v in zone]})
+        # Vias from PathResult.via_metadata (Phase D-6/E-2) if present.
+        for net, pr in routed_paths.items():
+            for v in (getattr(pr, 'via_metadata', None) or []):
+                xy = v.get('xy_mm')
+                if xy:
+                    overlay['vias'].append({
+                        'net': net,
+                        'xy': [round(xy[0], 4), round(xy[1], 4)],
+                        'kind': v.get('kind'),
+                        'start_layer': v.get('start_layer'),
+                        'end_layer': v.get('end_layer')})
+        metrics['overlay_mm'] = overlay
+    except Exception as e:
+        phase_c_errors['overlay_mm'] = f'{type(e).__name__}: {e}'
+
     if phase_b_errors:
         metrics['phase_b_errors'] = phase_b_errors
     if phase_c_errors:
