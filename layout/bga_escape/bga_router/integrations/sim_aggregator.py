@@ -120,6 +120,41 @@ def insertion_loss_db(s21: List[complex]) -> Optional[float]:
     return 20.0 * math.log10(max(1e-12, abs(s21[0])))
 
 
+def _z0_from_solver_summary(task_dir: Path, net: str) -> Optional[float]:
+    """sol_d/sol_b가 남긴 summary.json의 field-solve Z0를 우선 사용.
+
+    Phase I-4 실검증에서 확인: near-DC S11 역산 Z0는 electrically-short
+    라인에서 reference 저항 (50Ω) 으로 수렴해 부정확 (예: sol_d 자체
+    2D 솔브 58.5Ω인데 S11 역산은 50.05Ω). summary가 있으면 그 값이
+    ground truth."""
+    import json as _json
+    for cand in (task_dir / 'summary.json',
+                  task_dir.parent / 'summary.json'):
+        if not cand.exists():
+            continue
+        try:
+            data = _json.loads(cand.read_text())
+        except Exception:
+            continue
+        # sol_d summary shape (Phase I-4 실검증 확인):
+        #   {'nets': {net: {'Z0_avg': ..., 'eps_eff_avg': ...}}}
+        # 방어적으로 Z0_avg / z0_ohm / Z0 순으로 탐색.
+        nets = data.get('nets')
+        if isinstance(nets, dict) and net in nets:
+            entry = nets[net]
+            for key in ('Z0_avg', 'z0_ohm', 'Z0', 'z0'):
+                z = entry.get(key)
+                if isinstance(z, (int, float)):
+                    return float(z)
+        for r in (data.get('results') or []):
+            if r.get('net') == net:
+                for key in ('Z0_avg', 'z0_ohm', 'Z0', 'z0'):
+                    z = r.get(key)
+                    if isinstance(z, (int, float)):
+                        return float(z)
+    return None
+
+
 def collect_sim_results(sim_output_root: str | Path,
                           net_of_task: Dict[str, str]
                           ) -> Dict[str, Dict[str, Any]]:
@@ -141,12 +176,20 @@ def collect_sim_results(sim_output_root: str | Path,
             parsed = parse_touchstone_s2p(f)
             if not parsed:
                 continue
-            z0 = z0_from_s11(parsed['s11'][0], parsed['z0_ref'])
+            z0_s11 = z0_from_s11(parsed['s11'][0], parsed['z0_ref'])
+            z0_summary = _z0_from_solver_summary(task_dir, net)
+            # Phase I-4: solver summary Z0가 있으면 우선 (field-solve
+            # ground truth); 없으면 S11 역산 (short-line 한계 명시).
+            z0 = z0_summary if z0_summary is not None else z0_s11
             loss_db = insertion_loss_db(parsed['s21'])
             out[net] = {
                 'source_file':          str(f),
                 'freq_points':          len(parsed['freqs_hz']),
                 'simulated_z0_ohm':     round(z0, 3) if z0 else None,
+                'z0_source':            ('solver_summary'
+                                          if z0_summary is not None
+                                          else 's11_inversion'),
+                'z0_s11_ohm':           round(z0_s11, 3) if z0_s11 else None,
                 'insertion_loss_db':    round(loss_db, 4) if loss_db else None,
                 'z0_ref':               parsed['z0_ref'],
             }

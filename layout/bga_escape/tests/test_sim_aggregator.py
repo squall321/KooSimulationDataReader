@@ -136,3 +136,37 @@ def test_summarize_correlations_computed(tmp_path):
     entry = agg['correlations'][0]
     assert entry['net'] == 'A'
     assert entry['delta_pct'] < 0     # sim(50) < analytical(55)
+
+
+# ---------------------------------------------------------------------------
+# Phase I-4 — solver summary.json Z0 우선 (S11 역산의 short-line 한계 회피)
+# ---------------------------------------------------------------------------
+
+
+def test_collect_prefers_solver_summary_z0(tmp_path):
+    """summary.json의 Z0_avg가 있으면 S11 역산보다 우선. Phase I-4
+    실검증에서 net114: S11=50.05, sol_d field-solve=58.48."""
+    d = tmp_path / 'T1'
+    d.mkdir(parents=True)
+    # S11≈0 → S11 역산 Z0 = z0_ref = 50
+    _write_s2p(d / 'net.s2p', '# Hz S RI R 50',
+                 [(1e6, 0.0, 0.0, 0.9, 0.0, 0.9, 0.0, 0.0, 0.0)])
+    # solver summary가 진짜 field-solve 값 58.48을 준다
+    (d / 'summary.json').write_text(json.dumps({
+        'nets': {'A': {'Z0_avg': 58.48, 'eps_eff_avg': 3.9}}}))
+    out = collect_sim_results(tmp_path, {'T1': 'A'})
+    assert out['A']['z0_source'] == 'solver_summary'
+    assert out['A']['simulated_z0_ohm'] == pytest.approx(58.48, abs=0.01)
+    # S11 역산 값도 나란히 보존 (투명성)
+    assert out['A']['z0_s11_ohm'] == pytest.approx(50.0, abs=0.5)
+
+
+def test_collect_falls_back_to_s11_without_summary(tmp_path):
+    d = tmp_path / 'T1'
+    d.mkdir(parents=True)
+    _write_s2p(d / 'net.s2p', '# Hz S RI R 50',
+                 [(1e6, 0.2, 0.0, 0.8, 0.0, 0.8, 0.0, 0.2, 0.0)])
+    out = collect_sim_results(tmp_path, {'T1': 'A'})
+    assert out['A']['z0_source'] == 's11_inversion'
+    # (1+0.2)/(1-0.2)*50 = 75
+    assert out['A']['simulated_z0_ohm'] == pytest.approx(75.0, abs=0.5)
