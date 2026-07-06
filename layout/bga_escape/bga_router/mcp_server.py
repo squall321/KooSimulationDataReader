@@ -85,10 +85,14 @@ def tool_register_dataset(arguments: Dict[str, Any]) -> Dict[str, Any]:
 
 def tool_route(arguments: Dict[str, Any]) -> Dict[str, Any]:
     from . import eval as _eval
+    from .cli import _resolve_bga
     dataset = arguments.get('dataset')
     bga = arguments.get('bga')
     if not dataset or not bga:
         raise ValueError('route requires dataset + bga')
+    # Resolve BGA substring shorthand ('bga218f' → full pkg name),
+    # matching CLI behaviour so MCP callers can use short names too.
+    bga = _resolve_bga(dataset, bga)
     recipe = arguments.get('recipe', 'default')
     budget = int(arguments.get('budget_s', 60))
     output = arguments.get('output')
