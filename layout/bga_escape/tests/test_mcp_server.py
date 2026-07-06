@@ -25,7 +25,9 @@ def _req(method, params=None, req_id=1):
 
 def test_initialize_returns_server_info():
     resp = mcp_server._handle(_req('initialize'))
-    assert resp['result']['serverInfo']['name'] == 'bga-router'
+    # ODB++ 분석기로 등록 — 정체성이 name/title/description에 드러나야 한다.
+    assert resp['result']['serverInfo']['name'] == 'odb-analyzer'
+    assert 'ODB' in resp['result']['serverInfo']['title']
     assert resp['result']['protocolVersion']
 
 
@@ -35,7 +37,7 @@ def test_initialized_notification_returns_none():
     assert resp is None
 
 
-def test_tools_list_exposes_all_fifteen():
+def test_tools_list_exposes_all_eighteen():
     resp = mcp_server._handle(_req('tools/list'))
     names = {t['name'] for t in resp['result']['tools']}
     assert names == {'register_dataset', 'route', 'get_metrics',
@@ -47,7 +49,9 @@ def test_tools_list_exposes_all_fifteen():
                       # Phase J-1
                       'si_report',
                       # Phase K
-                      'odb_inspect', 'odb_analyze'}
+                      'odb_inspect', 'odb_analyze',
+                      # Phase L
+                      'package_features', 'metamodel_list', 'metamodel_infer'}
     # Every tool has a schema + description
     for t in resp['result']['tools']:
         assert t['inputSchema']['type'] == 'object'
@@ -299,5 +303,49 @@ def test_odb_analyze_tool(tmp_path):
 def test_odb_analyze_requires_input():
     resp = mcp_server._handle(_req('tools/call', {
         'name': 'odb_analyze', 'arguments': {},
+    }))
+    assert resp['result'].get('isError') is True
+
+
+# ---------------------------------------------------------------------------
+# Phase L — metamodel tools
+# ---------------------------------------------------------------------------
+
+
+def test_metamodel_list_tool():
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'metamodel_list', 'arguments': {},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    names = {m['name'] for m in body['metamodels']}
+    assert 'thermal_shock_v0' in names
+
+
+def test_metamodel_infer_direct_features():
+    feats = {
+        'top_pkg_area': 100.0, 'bot_pkg_area': 90.0,
+        'center_distance_mm': 2.0, 'overlap_area_mm2': 60.0,
+        'min_pkg_dim_mm': 8.0, 'board_thickness_mm': 1.0,
+    }
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'metamodel_infer',
+        'arguments': {'metamodel': 'thermal_shock_v0', 'features': feats},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    assert 'thermal_shock_risk_score' in body
+    assert 'provenance' in body
+    assert body['provenance'].startswith('reference_analytical')
+
+
+def test_metamodel_infer_requires_input():
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'metamodel_infer', 'arguments': {},
+    }))
+    assert resp['result'].get('isError') is True
+
+
+def test_package_features_requires_input():
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'package_features', 'arguments': {},
     }))
     assert resp['result'].get('isError') is True

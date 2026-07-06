@@ -38,8 +38,14 @@ from typing import Any, Dict, List, Optional
 
 
 PROTOCOL_VERSION = '2024-11-05'
-SERVER_NAME = 'bga-router'
-SERVER_VERSION = '1.0.0'
+# ODB++ 설계 분석기 — HWAXPortal MCP 게이트웨이에 "ODB analyzer"로 등록.
+# (내부 구현 패키지명은 bga_router지만, MCP 정체성은 ODB 분석기다.)
+SERVER_NAME = 'odb-analyzer'
+SERVER_VERSION = '1.1.0'
+SERVER_TITLE = 'ODB++ 설계 분석기'
+SERVER_DESCRIPTION = (
+    'ODB++ 설계 파일을 직독 분석하는 MCP. 레이어/net/패키지 구조 요약, '
+    '기존 배선 분석, 배선 평가, 대리모델 기반 사전 신뢰성 추론을 제공한다.')
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +171,81 @@ def tool_spice_export(arguments: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError('spice_export requires eval_path + out_path')
     p = write_spice_lib(path, out)
     return {'lib_path': str(p), 'size_bytes': p.stat().st_size}
+
+
+def _load_packages_from_dataset(dataset_or_odb: str):
+    """dataset 이름(registry) 또는 ODB++ 경로 → PackageInstance 목록 + board bbox."""
+    from src.eda_parser import load_eda_with_placement
+    from bga_router.metrics.package_features import (
+        build_packages, bbox_of)
+    from . import registry as _registry
+    # dataset 이름이면 registry에서 경로 해석, 아니면 경로 그대로.
+    eda_root = None
+    step = 'mentor'
+    try:
+        d = _registry.get_dataset(dataset_or_odb)
+        eda_root = d['path']
+        step = d.get('step', 'mentor')
+    except Exception:
+        eda_root = dataset_or_odb
+    eda_path = f'{eda_root}/steps/{step}/eda/data'
+    eda = load_eda_with_placement(eda_path)
+    pkgs = build_packages(eda, eda_path=eda_path)
+    # board bbox = 모든 패키지 bbox 합집합
+    board = None
+    for p in pkgs:
+        b = bbox_of(p)
+        if board is None:
+            board = list(b)
+        else:
+            board[0] = min(board[0], b[0]); board[1] = min(board[1], b[1])
+            board[2] = max(board[2], b[2]); board[3] = max(board[3], b[3])
+    return pkgs, board
+
+
+def tool_package_features(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """패키지 물리 피처(크기/side/주변/반대면 겹침) 추출 — 대리모델 입력."""
+    from bga_router.metrics.package_features import summarize_packages
+    dataset = arguments.get('dataset') or arguments.get('odb_dir')
+    if not dataset:
+        raise ValueError('package_features requires dataset or odb_dir')
+    pkgs, board = _load_packages_from_dataset(dataset)
+    return summarize_packages(pkgs, board_bbox=board)
+
+
+def tool_metamodel_list(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """등록된 대리모델(surrogate) 목록."""
+    from bga_router.metamodel import models as _m  # noqa: F401 (등록 side effect)
+    from bga_router.metamodel.registry import list_metamodels
+    return {'metamodels': list_metamodels()}
+
+
+def tool_metamodel_infer(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """대리모델 추론 — 상/하단 패키지 쌍 위험도 사전 추정 (시뮬 없이)."""
+    from bga_router.metamodel import models as _m  # noqa: F401
+    from bga_router.metamodel.infer import infer, infer_all_pairs
+    from bga_router.metamodel.registry import get_metamodel
+    from bga_router.metamodel.feature_spec import FeatureVectorSpec
+    model = arguments.get('metamodel', 'thermal_shock_v0')
+    board_t = arguments.get('board_thickness_mm')
+    # 직접 피처 벡터가 주어지면 단건 추론. 이때 features는 이미 모델 입력
+    # 키를 쓰므로 identity spec(모델 input_features → 동일 키)으로 우회한다.
+    if arguments.get('features'):
+        mm = get_metamodel(model)
+        identity = FeatureVectorSpec(mapping={k: k for k in mm.input_features})
+        return infer(dict(arguments['features']), model, spec=identity,
+                     board_thickness_mm=board_t)
+    # 아니면 dataset/ODB에서 패키지 로드 → 전 쌍 스캔.
+    dataset = arguments.get('dataset') or arguments.get('odb_dir')
+    if not dataset:
+        raise ValueError('metamodel_infer requires features or dataset/odb_dir')
+    pkgs, _ = _load_packages_from_dataset(dataset)
+    ranked = infer_all_pairs(
+        pkgs, model,
+        min_overlap_ratio=float(arguments.get('min_overlap_ratio', 0.0)),
+        board_thickness_mm=board_t)
+    return {'metamodel': model, 'pair_count': len(ranked),
+            'ranked': ranked}
 
 
 def tool_odb_inspect(arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -402,6 +483,43 @@ _TOOLS = {
             'required': ['eval_path', 'out_path'],
         },
     },
+    'package_features': {
+        'fn': tool_package_features,
+        'description': '패키지 물리 피처 추출 — 크기/side(TOP·BOT)/면적/핀수 + '
+                        '주변/반대면 겹침 관계. 대리모델 입력 및 배치 검토용. '
+                        'dataset(등록명) 또는 odb_dir 경로.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'dataset': {'type': 'string'},
+                'odb_dir': {'type': 'string'},
+            },
+        },
+    },
+    'metamodel_list': {
+        'fn': tool_metamodel_list,
+        'description': '등록된 대리모델(surrogate) 목록 — 이름/버전/입력·출력 '
+                        '피처/종류.',
+        'inputSchema': {'type': 'object', 'properties': {}},
+    },
+    'metamodel_infer': {
+        'fn': tool_metamodel_infer,
+        'description': '대리모델 사전 추론 — 정밀 시뮬 없이 위험도 추정. '
+                        'dataset/odb_dir 주면 상·하단 패키지 겹침 쌍 전부를 '
+                        '위험 순위로 반환(예: thermal_shock_v0 열충격). '
+                        'features(피처 벡터) 직접 주면 단건 추론.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'metamodel':        {'type': 'string', 'default': 'thermal_shock_v0'},
+                'dataset':          {'type': 'string'},
+                'odb_dir':          {'type': 'string'},
+                'features':         {'type': 'object'},
+                'min_overlap_ratio': {'type': 'number', 'default': 0.0},
+                'board_thickness_mm': {'type': 'number'},
+            },
+        },
+    },
     'odb_inspect': {
         'fn': tool_odb_inspect,
         'description': 'ODB++ 구조 직독 요약 (재라우팅 없이) — 레이어/타입/'
@@ -569,7 +687,10 @@ def _handle(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return _ok({
             'protocolVersion': PROTOCOL_VERSION,
             'capabilities': {'tools': {}},
-            'serverInfo': {'name': SERVER_NAME, 'version': SERVER_VERSION},
+            'serverInfo': {
+                'name': SERVER_NAME, 'version': SERVER_VERSION,
+                'title': SERVER_TITLE, 'description': SERVER_DESCRIPTION,
+            },
         })
     if method == 'notifications/initialized':
         return None
