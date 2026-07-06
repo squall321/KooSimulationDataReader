@@ -37,7 +37,7 @@ def test_initialized_notification_returns_none():
     assert resp is None
 
 
-def test_tools_list_exposes_all_eighteen():
+def test_tools_list_exposes_all_nineteen():
     resp = mcp_server._handle(_req('tools/list'))
     names = {t['name'] for t in resp['result']['tools']}
     assert names == {'register_dataset', 'route', 'get_metrics',
@@ -51,7 +51,9 @@ def test_tools_list_exposes_all_eighteen():
                       # Phase K
                       'odb_inspect', 'odb_analyze',
                       # Phase L
-                      'package_features', 'metamodel_list', 'metamodel_infer'}
+                      'package_features', 'metamodel_list', 'metamodel_infer',
+                      # Phase M
+                      'analyze_project'}
     # Every tool has a schema + description
     for t in resp['result']['tools']:
         assert t['inputSchema']['type'] == 'object'

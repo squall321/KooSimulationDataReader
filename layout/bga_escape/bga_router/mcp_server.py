@@ -203,6 +203,59 @@ def _load_packages_from_dataset(dataset_or_odb: str):
     return pkgs, board
 
 
+def tool_analyze_project(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """과제명/Rev/개발단계로 AIDataHub에서 ODB를 찾아 분석.
+
+    흐름: AIDataHub 조회(project/rev/stage) → ODB 경로 해석 → 요청한
+    분석(inspect/analyze/packages/metamodel) 수행. HWAXPortal 게이트웨이
+    에서 '과제를 물어보면 데이터를 가져와 분석'하는 진입점.
+    """
+    from .integrations.aidatahub_client import AIDataHubClient
+    project = arguments.get('project')
+    if not project:
+        raise ValueError('analyze_project requires project (과제명)')
+    rev = arguments.get('rev')
+    stage = arguments.get('stage')
+    analysis = arguments.get('analysis', 'inspect')  # inspect|packages|metamodel
+    client = AIDataHubClient(base_url=arguments.get('base_url'),
+                              api_key=arguments.get('api_key'))
+    found = client.find_records(project=project, rev=rev, stage=stage,
+                                  limit=int(arguments.get('limit', 10)))
+    items = found.get('items') or []
+    if not items:
+        return {'project': project, 'rev': rev, 'stage': stage,
+                'found': 0,
+                'note': ('해당 과제 레코드 없음 — AIDataHub에 등록 필요 '
+                         '(register_odb) 또는 project/rev/stage 확인.')}
+    # 첫 매칭 레코드의 ODB 경로 해석.
+    record = items[0]
+    odb_dir = client.resolve_odb_path(record)
+    result: Dict[str, Any] = {
+        'project': project, 'rev': rev, 'stage': stage,
+        'found': len(items),
+        'record_id': record.get('id'),
+        'record_title': record.get('title'),
+        'odb_dir': odb_dir,
+    }
+    if not odb_dir:
+        result['note'] = ('레코드는 찾았으나 ODB 로컬 경로 미해석 '
+                          '(content.file_metadata.odb_dir 필요).')
+        return result
+    # 요청 분석 수행.
+    if analysis == 'inspect':
+        result['analysis'] = tool_odb_inspect({'odb_dir': odb_dir})
+    elif analysis == 'packages':
+        result['analysis'] = tool_package_features({'odb_dir': odb_dir})
+    elif analysis == 'metamodel':
+        result['analysis'] = tool_metamodel_infer({
+            'odb_dir': odb_dir,
+            'metamodel': arguments.get('metamodel', 'thermal_shock_v0'),
+            'min_overlap_ratio': arguments.get('min_overlap_ratio', 0.0)})
+    else:
+        result['note'] = f'unknown analysis {analysis!r}'
+    return result
+
+
 def tool_package_features(arguments: Dict[str, Any]) -> Dict[str, Any]:
     """패키지 물리 피처(크기/side/주변/반대면 겹침) 추출 — 대리모델 입력."""
     from bga_router.metrics.package_features import summarize_packages
@@ -481,6 +534,29 @@ _TOOLS = {
                 'out_path':  {'type': 'string'},
             },
             'required': ['eval_path', 'out_path'],
+        },
+    },
+    'analyze_project': {
+        'fn': tool_analyze_project,
+        'description': '과제명/Rev/개발단계로 AIDataHub에서 ODB를 찾아 분석. '
+                        'HWAXPortal에서 "과제를 물어보면 데이터를 가져와 '
+                        '분석"하는 진입점. analysis=inspect|packages|metamodel.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'project':   {'type': 'string', 'description': '과제명 (예: Z3)'},
+                'rev':       {'type': 'string', 'description': 'Rev (예: B)'},
+                'stage':     {'type': 'string', 'description': '개발단계 (예: DV)'},
+                'analysis':  {'type': 'string',
+                               'enum': ['inspect', 'packages', 'metamodel'],
+                               'default': 'inspect'},
+                'metamodel': {'type': 'string', 'default': 'thermal_shock_v0'},
+                'base_url':  {'type': 'string'},
+                'api_key':   {'type': 'string'},
+                'limit':     {'type': 'integer', 'default': 10},
+                'min_overlap_ratio': {'type': 'number', 'default': 0.0},
+            },
+            'required': ['project'],
         },
     },
     'package_features': {
