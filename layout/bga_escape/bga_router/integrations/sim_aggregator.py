@@ -120,6 +120,61 @@ def insertion_loss_db(s21: List[complex]) -> Optional[float]:
     return 20.0 * math.log10(max(1e-12, abs(s21[0])))
 
 
+def _s21_db(s21_c: complex) -> float:
+    return 20.0 * math.log10(max(1e-12, abs(s21_c)))
+
+
+def insertion_loss_curve(freqs_hz: List[float], s21: List[complex]
+                           ) -> Dict[str, Any]:
+    """Phase J-1 — full-band S21 insertion-loss curve.
+
+    Returns:
+      {
+        'freqs_ghz':      [...],
+        'il_db':          [...],           # |S21| in dB at each freq
+        'il_at_1ghz_db':  float|None,      # interpolated
+        'il_at_5ghz_db':  float|None,
+        'f3db_ghz':       float|None,      # first freq where IL <= -3 dB
+        'worst_il_db':    float,           # most negative
+      }
+    """
+    if not freqs_hz or not s21:
+        return {'freqs_ghz': [], 'il_db': [], 'il_at_1ghz_db': None,
+                 'il_at_5ghz_db': None, 'f3db_ghz': None,
+                 'worst_il_db': None}
+    ghz = [f / 1e9 for f in freqs_hz]
+    il = [_s21_db(c) for c in s21]
+
+    def _interp_at(target_ghz: float) -> Optional[float]:
+        if target_ghz < ghz[0] or target_ghz > ghz[-1]:
+            return None
+        for i in range(1, len(ghz)):
+            if ghz[i] >= target_ghz:
+                f0, f1 = ghz[i - 1], ghz[i]
+                y0, y1 = il[i - 1], il[i]
+                if f1 == f0:
+                    return round(y1, 4)
+                t = (target_ghz - f0) / (f1 - f0)
+                return round(y0 + t * (y1 - y0), 4)
+        return round(il[-1], 4)
+
+    # -3 dB crossing (first frequency dropping to/below -3 dB)
+    f3db = None
+    for i, y in enumerate(il):
+        if y <= -3.0:
+            f3db = round(ghz[i], 4)
+            break
+
+    return {
+        'freqs_ghz':     [round(g, 4) for g in ghz],
+        'il_db':         [round(y, 4) for y in il],
+        'il_at_1ghz_db': _interp_at(1.0),
+        'il_at_5ghz_db': _interp_at(5.0),
+        'f3db_ghz':      f3db,
+        'worst_il_db':   round(min(il), 4),
+    }
+
+
 def _z0_from_solver_summary(task_dir: Path, net: str) -> Optional[float]:
     """sol_d/sol_b가 남긴 summary.json의 field-solve Z0를 우선 사용.
 
@@ -182,6 +237,8 @@ def collect_sim_results(sim_output_root: str | Path,
             # ground truth); 없으면 S11 역산 (short-line 한계 명시).
             z0 = z0_summary if z0_summary is not None else z0_s11
             loss_db = insertion_loss_db(parsed['s21'])
+            # Phase J-1 — full-band S21 loss curve.
+            il_curve = insertion_loss_curve(parsed['freqs_hz'], parsed['s21'])
             out[net] = {
                 'source_file':          str(f),
                 'freq_points':          len(parsed['freqs_hz']),
@@ -191,6 +248,7 @@ def collect_sim_results(sim_output_root: str | Path,
                                           else 's11_inversion'),
                 'z0_s11_ohm':           round(z0_s11, 3) if z0_s11 else None,
                 'insertion_loss_db':    round(loss_db, 4) if loss_db else None,
+                'insertion_loss_curve': il_curve,
                 'z0_ref':               parsed['z0_ref'],
             }
             break

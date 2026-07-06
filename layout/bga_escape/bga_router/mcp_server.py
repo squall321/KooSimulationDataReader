@@ -163,6 +163,17 @@ def tool_spice_export(arguments: Dict[str, Any]) -> Dict[str, Any]:
     return {'lib_path': str(p), 'size_bytes': p.stat().st_size}
 
 
+def tool_si_report(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    from .integrations.si_report import write_si_report
+    path = arguments.get('eval_path')
+    out = arguments.get('out_path')
+    if not path or not out:
+        raise ValueError('si_report requires eval_path + out_path')
+    p = write_si_report(path, out)
+    return {'html_path': str(p), 'size_bytes': p.stat().st_size,
+             'hint': 'S21 insertion-loss 곡선/net. sim-agg 먼저 실행 필요.'}
+
+
 def tool_pdn(arguments: Dict[str, Any]) -> Dict[str, Any]:
     from .integrations.pdn_runner import summarize_pdn
     eval_path = arguments.get('eval_path')
@@ -340,6 +351,20 @@ _TOOLS = {
         'fn': tool_spice_export,
         'description': 'Export a SPICE .lib (lumped RLC + K coupling) from a '
                         'route result JSON.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'eval_path': {'type': 'string'},
+                'out_path':  {'type': 'string'},
+            },
+            'required': ['eval_path', 'out_path'],
+        },
+    },
+    'si_report': {
+        'fn': tool_si_report,
+        'description': 'Frequency-domain SI report — per-net S21 insertion '
+                        'loss curves (SVG sparklines) + IL@1/5GHz + f3dB. '
+                        'Requires metrics.si.simulated (run sim_agg first).',
         'inputSchema': {
             'type': 'object',
             'properties': {

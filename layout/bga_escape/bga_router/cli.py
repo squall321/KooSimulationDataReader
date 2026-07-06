@@ -237,6 +237,13 @@ def cmd_pdn(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_si_report(args: argparse.Namespace) -> int:
+    from .integrations.si_report import write_si_report
+    out = write_si_report(args.input, args.output)
+    print(f'[si-report] wrote {out}')
+    return 0
+
+
 def cmd_viewer(args: argparse.Namespace) -> int:
     from .integrations.route_viewer import write_route_viewer
     out = write_route_viewer(args.input, args.output)
@@ -572,6 +579,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_pd.add_argument('--output-dir', default='pdn_out', dest='output_dir')
     p_pd.add_argument('--dry-run', action='store_true', dest='dry_run')
     p_pd.set_defaults(func=cmd_pdn)
+
+    # si-report — Phase J-1: frequency-domain S21 insertion loss report
+    p_sr = sub.add_parser('si-report',
+                            help='Frequency-domain SI report (S21 curves) HTML.')
+    p_sr.add_argument('--input', required=True,
+                       help='Route JSON with metrics.si.simulated '
+                            '(run sim-agg first).')
+    p_sr.add_argument('--output', required=True, help='Output HTML path.')
+    p_sr.set_defaults(func=cmd_si_report)
 
     return p
 
