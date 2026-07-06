@@ -167,6 +167,44 @@ def tool_spice_export(arguments: Dict[str, Any]) -> Dict[str, Any]:
     return {'lib_path': str(p), 'size_bytes': p.stat().st_size}
 
 
+def tool_odb_inspect(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """ODB++ 구조 직독 요약 (재라우팅 없이). odb_to_json 자동 실행."""
+    from .integrations.odb_inspect import inspect_odb
+    from .integrations.odb_json_builder import build_odb_json_if_missing
+    json_dir = arguments.get('json_dir')
+    odb_dir = arguments.get('odb_dir')
+    if not json_dir and not odb_dir:
+        raise ValueError('odb_inspect requires json_dir or odb_dir')
+    if not json_dir:
+        # derive a json dir next to the odb and build it
+        json_dir = str(Path(odb_dir).parent / (Path(odb_dir).name + '_json'))
+    if odb_dir:
+        build_odb_json_if_missing(json_dir, odb_dir=odb_dir)
+    return inspect_odb(json_dir)
+
+
+def tool_odb_analyze(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """ODB++ 기존 배선(net 폴리곤) 직독 분석. odb_to_em_json 자동 실행."""
+    from .metrics.odb_traces import load_em_data, summarize_traces
+    from .integrations.em_data_builder import build_em_data_if_missing
+    em_data_path = arguments.get('em_data')
+    odb_dir = arguments.get('odb_dir')
+    stackup_yaml = arguments.get('stackup_yaml')
+    if not em_data_path and not odb_dir:
+        raise ValueError('odb_analyze requires em_data or odb_dir')
+    if not em_data_path:
+        em_data_path = str(Path(odb_dir).parent /
+                            (Path(odb_dir).name + '_em.json'))
+    if odb_dir:
+        if not stackup_yaml:
+            raise ValueError('odb_analyze with odb_dir requires stackup_yaml '
+                             'for em_data extraction')
+        build_em_data_if_missing(em_data_path, odb_dir=odb_dir,
+                                   stackup_yaml=stackup_yaml)
+    em = load_em_data(em_data_path)
+    return summarize_traces(em, max_nets=int(arguments.get('max_nets', 0)) or None)
+
+
 def tool_si_report(arguments: Dict[str, Any]) -> Dict[str, Any]:
     from .integrations.si_report import write_si_report
     path = arguments.get('eval_path')
@@ -362,6 +400,38 @@ _TOOLS = {
                 'out_path':  {'type': 'string'},
             },
             'required': ['eval_path', 'out_path'],
+        },
+    },
+    'odb_inspect': {
+        'fn': tool_odb_inspect,
+        'description': 'ODB++ 구조 직독 요약 (재라우팅 없이) — 레이어/타입/'
+                        'feature 통계 + 심볼(드릴/패드 사이즈) 요약. odb_dir '
+                        '주면 odb_to_json 자동 실행, json_dir 주면 그대로 읽음.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'json_dir': {'type': 'string',
+                              'description': 'odb_to_json 출력 디렉터리'},
+                'odb_dir':  {'type': 'string',
+                              'description': 'ODB++ 디렉터리 (자동 추출)'},
+            },
+        },
+    },
+    'odb_analyze': {
+        'fn': tool_odb_analyze,
+        'description': 'ODB++ 기존 배선(net 폴리곤) 직독 분석 — net별 레이어 '
+                        'span / via 유무 / bbox / 근사 길이 + signal/plane 분류. '
+                        'odb_dir+stackup_yaml 주면 odb_to_em_json 자동 실행.',
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'em_data':      {'type': 'string',
+                                  'description': 'em_data.json 경로'},
+                'odb_dir':      {'type': 'string'},
+                'stackup_yaml': {'type': 'string'},
+                'max_nets':     {'type': 'integer',
+                                  'description': '분석 net 상한 (0=전부)'},
+            },
         },
     },
     'si_report': {

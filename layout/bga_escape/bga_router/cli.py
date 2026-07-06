@@ -237,6 +237,45 @@ def cmd_pdn(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_odb_inspect(args: argparse.Namespace) -> int:
+    from .integrations.odb_inspect import inspect_odb
+    from .integrations.odb_json_builder import build_odb_json_if_missing
+    json_dir = args.json_dir
+    if not json_dir and not args.odb_dir:
+        print('odb-inspect requires --json-dir or --odb-dir')
+        return 2
+    if not json_dir:
+        json_dir = str(Path(args.odb_dir).parent /
+                        (Path(args.odb_dir).name + '_json'))
+    if args.odb_dir:
+        build_odb_json_if_missing(json_dir, odb_dir=args.odb_dir)
+    result = inspect_odb(json_dir)
+    _emit(result, args.output)
+    return 0
+
+
+def cmd_odb_analyze(args: argparse.Namespace) -> int:
+    from .metrics.odb_traces import load_em_data, summarize_traces
+    from .integrations.em_data_builder import build_em_data_if_missing
+    em_data = args.em_data
+    if not em_data and not args.odb_dir:
+        print('odb-analyze requires --em-data or --odb-dir')
+        return 2
+    if not em_data:
+        em_data = str(Path(args.odb_dir).parent /
+                       (Path(args.odb_dir).name + '_em.json'))
+    if args.odb_dir:
+        if not args.stackup_yaml:
+            print('odb-analyze with --odb-dir requires --stackup-yaml')
+            return 2
+        build_em_data_if_missing(em_data, odb_dir=args.odb_dir,
+                                   stackup_yaml=args.stackup_yaml)
+    em = load_em_data(em_data)
+    result = summarize_traces(em, max_nets=args.max_nets or None)
+    _emit(result, args.output)
+    return 0
+
+
 def cmd_si_report(args: argparse.Namespace) -> int:
     from .integrations.si_report import write_si_report
     out = write_si_report(args.input, args.output)
@@ -588,6 +627,27 @@ def build_parser() -> argparse.ArgumentParser:
                             '(run sim-agg first).')
     p_sr.add_argument('--output', required=True, help='Output HTML path.')
     p_sr.set_defaults(func=cmd_si_report)
+
+    # odb-inspect — Phase K: ODB++ 구조 직독 요약
+    p_oi = sub.add_parser('odb-inspect',
+                            help='ODB++ structural summary (no re-routing).')
+    p_oi.add_argument('--json-dir', default=None, dest='json_dir',
+                       help='odb_to_json output directory.')
+    p_oi.add_argument('--odb-dir', default=None, dest='odb_dir',
+                       help='ODB++ dir (auto-runs odb_to_json).')
+    p_oi.add_argument('--output', default=None, help='JSON out (stdout if omitted).')
+    p_oi.set_defaults(func=cmd_odb_inspect)
+
+    # odb-analyze — Phase K: ODB++ 기존 배선 net 직독 분석
+    p_oa = sub.add_parser('odb-analyze',
+                            help='Analyze existing ODB++ traces (no re-routing).')
+    p_oa.add_argument('--em-data', default=None, dest='em_data',
+                       help='em_data.json path.')
+    p_oa.add_argument('--odb-dir', default=None, dest='odb_dir')
+    p_oa.add_argument('--stackup-yaml', default=None, dest='stackup_yaml')
+    p_oa.add_argument('--max-nets', type=int, default=0, dest='max_nets')
+    p_oa.add_argument('--output', default=None, help='JSON out (stdout if omitted).')
+    p_oa.set_defaults(func=cmd_odb_analyze)
 
     return p
 

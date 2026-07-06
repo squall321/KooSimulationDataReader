@@ -35,7 +35,7 @@ def test_initialized_notification_returns_none():
     assert resp is None
 
 
-def test_tools_list_exposes_all_thirteen():
+def test_tools_list_exposes_all_fifteen():
     resp = mcp_server._handle(_req('tools/list'))
     names = {t['name'] for t in resp['result']['tools']}
     assert names == {'register_dataset', 'route', 'get_metrics',
@@ -45,7 +45,9 @@ def test_tools_list_exposes_all_thirteen():
                       # Phase I-2 / I-3
                       'route_viewer', 'pdn',
                       # Phase J-1
-                      'si_report'}
+                      'si_report',
+                      # Phase K
+                      'odb_inspect', 'odb_analyze'}
     # Every tool has a schema + description
     for t in resp['result']['tools']:
         assert t['inputSchema']['type'] == 'object'
@@ -226,3 +228,76 @@ def test_xtalk_sim_tool_writes_netlists(tmp_path):
     body = json.loads(resp['result']['content'][0]['text'])
     assert body['pairs_simulated'] == 1
     assert 'ngspice_available' in body
+
+
+# ---------------------------------------------------------------------------
+# Phase K — ODB direct-read tools
+# ---------------------------------------------------------------------------
+
+
+def _synth_odb_json(tmp_path):
+    d = tmp_path / 'odbjson'
+    d.mkdir()
+    (d / 'index.json').write_text(json.dumps({
+        'job': 'JOB', 'step': 'S',
+        'bbox': {'xmin': 0, 'ymin': 0, 'xmax': 10, 'ymax': 5},
+        'region': None,
+        'layers': [{'name': 'lay1', 'file': 'lay1.json', 'total': 3,
+                     'lines': 1, 'pads': 2, 'arcs': 0, 'surfaces': 0,
+                     'bbox': {'xmin': 0, 'ymin': 0, 'xmax': 10, 'ymax': 5}}],
+    }))
+    (d / 'lay1.json').write_text(json.dumps({
+        'name': 'lay1', 'units': 'MM', 'type': 'Signal',
+        'bbox': {'xmin': 0, 'ymin': 0, 'xmax': 10, 'ymax': 5},
+        'counts': {'lines': 1, 'pads': 2, 'arcs': 0, 'surfaces': 0},
+        'symbols': {'r100': {'type': 'Round', 'w': 0.1, 'h': 0.1}},
+        'features': [{'t': 'P', 'x': 1, 'y': 1, 'sym': 'r100', 'pol': 'P'}],
+    }))
+    return d
+
+
+def test_odb_inspect_tool(tmp_path):
+    d = _synth_odb_json(tmp_path)
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'odb_inspect',
+        'arguments': {'json_dir': str(d)},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    assert body['structure']['job'] == 'JOB'
+    assert body['structure']['layer_count'] == 1
+    assert 'symbols' in body
+
+
+def test_odb_inspect_requires_input():
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'odb_inspect', 'arguments': {},
+    }))
+    assert resp['result'].get('isError') is True
+
+
+def test_odb_analyze_tool(tmp_path):
+    em = tmp_path / 'em.json'
+    em.write_text(json.dumps({
+        'job': 'J', 'units': 'MM',
+        'layers': {
+            'COMP': {'z_bottom': 0, 'z_top': 0.035, 'nets': {
+                'netA': {'polygons': [{'type': 'fill',
+                    'outer': [[0, 0], [1, 0], [1, 1], [0, 1]]}]}}},
+            'LAY2': {'z_bottom': 0.1, 'z_top': 0.135, 'nets': {
+                'netA': {'polygons': [{'type': 'fill',
+                    'outer': [[2, 2], [3, 2], [3, 3], [2, 3]]}]}}},
+        }}))
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'odb_analyze',
+        'arguments': {'em_data': str(em)},
+    }))
+    body = json.loads(resp['result']['content'][0]['text'])
+    assert body['net_count'] == 1
+    assert 'netA' in body['multi_layer_nets']   # spans COMP + LAY2
+
+
+def test_odb_analyze_requires_input():
+    resp = mcp_server._handle(_req('tools/call', {
+        'name': 'odb_analyze', 'arguments': {},
+    }))
+    assert resp['result'].get('isError') is True
