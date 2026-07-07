@@ -72,6 +72,9 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
   <div><label><input type="checkbox" id="ov-pkg" checked> packages</label></div>
   <h3>Layers</h3><div id="layers"></div>
   <h3>Packages <span style="font-weight:400;color:#888">(click = nearby nets, dbl = zoom)</span></h3>
+  <div style="color:#888;margin:2px 0 4px">label ≥ <input id="pkg-thresh" type="number"
+    value="2" min="0" step="0.5" style="width:46px"> mm
+    <span style="font-size:10px">(smaller: hover)</span></div>
   <div id="pkgs"></div>
   <h3>Nets <span style="font-weight:400;color:#888">(dbl-click = zoom)</span></h3>
   <div id="nets"></div>
@@ -87,6 +90,8 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let selected = new Set();
 let selectedPkg = null;
+let hoveredPkg = null;
+let pkgMajorMinMm = 2.0;   // 최대 치수 ≥ 이 값이면 '큰 패키지'(라벨 상시)
 let layerVisible = {{}};
 let scale = 1, offX = 0, offY = 0, dragging = false, lastX = 0, lastY = 0;
 
@@ -116,32 +121,53 @@ function fit() {{
   offY = (canvas.height + h * scale) / 2 + minY * scale;
 }}
 function toPx(x, y) {{ return [x * scale + offX, -y * scale + offY]; }}
+function toWorld(px, py) {{ return [(px - offX) / scale, (offY - py) / scale]; }}
 
 const overlay = DATA.overlay || {{pins: [], vias: [], keep_outs: [], packages: []}};
 let showPins = true, showVias = true, showKO = true, showPkg = true;
+
+function pkgMaxDimMm(pk) {{
+  const bb = pk.bbox_mm || [0, 0, 0, 0];
+  return Math.max(Math.abs(bb[2] - bb[0]), Math.abs(bb[3] - bb[1]));
+}}
+// '큰 패키지' = 최대 치수 임계 이상 또는 핀 8개 이상(큰 IC/커넥터).
+function pkgIsMajor(pk) {{
+  return pkgMaxDimMm(pk) >= pkgMajorMinMm || (pk.pin_count || 0) >= 8;
+}}
 
 function _visibleForNet(net) {{
   return !selected.size || selected.has(net);
 }}
 
 function drawOverlay() {{
-  // package outlines + refDes labels (behind net markers)
+  // package outlines + refDes labels (behind net markers).
+  // 큰 패키지: 외곽 + 라벨 상시. 작은 패키지: 흐린 외곽만; 호버(또는 선택)
+  // 시 밝은 외곽 + 라벨. 조밀한 보드에서 라벨 난립을 막는다.
   if (showPkg) {{
     ctx.save();
     ctx.font = '11px monospace';
+    const labels = [];   // 라벨은 모든 외곽 위에 그리도록 2-pass.
     for (const pk of (overlay.packages || [])) {{
       const bb = pk.bbox_mm; if (!bb) continue;
       const [px0, py0] = toPx(bb[0], bb[1]);
       const [px1, py1] = toPx(bb[2], bb[3]);
       const rx = Math.min(px0, px1), ry = Math.min(py0, py1);
       const rw = Math.abs(px1 - px0), rh = Math.abs(py1 - py0);
-      // TOP = mauve, BOT = cyan. Selected package = bright outline.
-      const col = pk.ref_des === selectedPkg ? '#ffee58'
+      const isSel = pk.ref_des === selectedPkg;
+      const isHov = pk.ref_des === hoveredPkg;
+      const major = pkgIsMajor(pk);
+      const col = isSel ? '#ffee58'
+                : isHov ? '#fff59d'
                 : pk.side === 'BOT' ? '#26c6da' : '#ce93d8';
+      // 작은 패키지는 흐리게(호버 지점 파악용), 큰/선택/호버는 선명하게.
+      ctx.globalAlpha = (major || isSel || isHov) ? 1.0 : 0.3;
       ctx.strokeStyle = col;
-      ctx.lineWidth = pk.ref_des === selectedPkg ? 2.5 : 1.5;
+      ctx.lineWidth = isSel ? 2.5 : (isHov ? 2.0 : (major ? 1.5 : 1.0));
       ctx.strokeRect(rx, ry, rw, rh);
-      const label = pk.ref_des || '';
+      ctx.globalAlpha = 1.0;
+      if (major || isSel || isHov) labels.push([rx, ry, pk.ref_des || '', col]);
+    }}
+    for (const [rx, ry, label, col] of labels) {{
       const tw = ctx.measureText(label).width;
       ctx.fillStyle = 'rgba(16,20,24,0.78)';
       ctx.fillRect(rx, ry - 13, tw + 6, 13);
@@ -246,6 +272,10 @@ document.getElementById('ov-ko').onchange = e => {{
 }};
 document.getElementById('ov-pkg').onchange = e => {{
   showPkg = e.target.checked; draw();
+}};
+document.getElementById('pkg-thresh').oninput = e => {{
+  const v = parseFloat(e.target.value);
+  if (!isNaN(v)) {{ pkgMajorMinMm = v; draw(); }}
 }};
 
 // --- side panel ---
@@ -354,10 +384,26 @@ canvas.addEventListener('mousedown', e => {{
   dragging = true; lastX = e.offsetX; lastY = e.offsetY;
 }});
 canvas.addEventListener('mousemove', e => {{
-  if (!dragging) return;
-  offX += e.offsetX - lastX; offY += e.offsetY - lastY;
-  lastX = e.offsetX; lastY = e.offsetY;
-  draw();
+  if (dragging) {{
+    offX += e.offsetX - lastX; offY += e.offsetY - lastY;
+    lastX = e.offsetX; lastY = e.offsetY;
+    draw();
+    return;
+  }}
+  if (!showPkg) {{ if (hoveredPkg) {{ hoveredPkg = null; draw(); }} return; }}
+  // 커서가 들어온 패키지 중 가장 작은 것을 선택(큰 IC 위 작은 칩 우선).
+  const [wx, wy] = toWorld(e.offsetX, e.offsetY);
+  let hit = null, hitArea = Infinity;
+  for (const pk of (overlay.packages || [])) {{
+    const bb = pk.bbox_mm; if (!bb) continue;
+    const lox = Math.min(bb[0], bb[2]), hix = Math.max(bb[0], bb[2]);
+    const loy = Math.min(bb[1], bb[3]), hiy = Math.max(bb[1], bb[3]);
+    if (wx >= lox && wx <= hix && wy >= loy && wy <= hiy) {{
+      const a = (hix - lox) * (hiy - loy);
+      if (a < hitArea) {{ hitArea = a; hit = pk.ref_des; }}
+    }}
+  }}
+  if (hit !== hoveredPkg) {{ hoveredPkg = hit; draw(); }}
 }});
 window.addEventListener('mouseup', () => dragging = false);
 window.addEventListener('resize', () => {{ fit(); draw(); }});

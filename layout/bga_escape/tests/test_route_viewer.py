@@ -170,3 +170,13 @@ def test_render_packages_absent_still_valid():
     html_text = render_route_viewer(d)
     assert '<canvas' in html_text
     assert 'netsInPackage' in html_text
+
+
+def test_render_major_minor_and_hover_present():
+    """큰 패키지 상시 라벨 / 작은 패키지 호버 표시 로직이 방출되는지."""
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'pkgIsMajor' in html_text
+    assert 'pkgMajorMinMm' in html_text
+    assert 'hoveredPkg' in html_text
+    assert 'toWorld' in html_text        # 호버 히트테스트용 역변환
+    assert 'pkg-thresh' in html_text     # 임계값 조절 입력
