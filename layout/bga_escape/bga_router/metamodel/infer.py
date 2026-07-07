@@ -38,6 +38,17 @@ DEFAULT_SPECS: dict = {
         },
         defaults={"board_thickness_mm": 1.0},
     ),
+    "drop_shock_v0": FeatureVectorSpec(
+        mapping={
+            "top_pkg_area": "top_pkg_area",
+            "bot_pkg_area": "bot_pkg_area",
+            "center_distance_mm": "center_dist",
+            "overlap_area_mm2": "overlap_area_mm2",
+            "min_pkg_dim_mm": "min_pkg_dim_mm",
+            "board_thickness_mm": "board_thickness_mm",
+        },
+        defaults={"board_thickness_mm": 1.0},
+    ),
 }
 
 
