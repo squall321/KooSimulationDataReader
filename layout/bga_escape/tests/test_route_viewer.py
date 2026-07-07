@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from bga_router.integrations.route_viewer import (
+    build_net_report,
     render_route_viewer,
     write_route_viewer,
 )
@@ -180,3 +181,66 @@ def test_render_major_minor_and_hover_present():
     assert 'hoveredPkg' in html_text
     assert 'toWorld' in html_text        # 호버 히트테스트용 역변환
     assert 'pkg-thresh' in html_text     # 임계값 조절 입력
+
+
+# ---------------------------------------------------------------------------
+# Phase P — net 인스펙터 (호버 → 해석·문제점 리포트)
+# ---------------------------------------------------------------------------
+
+
+def _metrics_for_report():
+    return {
+        'paths_mm': {'netB': [{'layer': 'L',
+                                'points': [[0, 0], [3, 0], [3, 4]]}]},   # len 7
+        'rule_check': {'by_field': {
+            'width_ok': {'pass': False, 'violators': ['netB']},
+            'bend_class_ok': {'pass': False, 'violators': ['netB']},
+            'keep_out_ok': {'pass': True, 'violators': []}}},
+        'coupling': {'top_pairs': [{'pair': ['netA', 'netB'],
+                                     'length_mm': 2.5}]},
+        'overlay_mm': {'vias': [{'net': 'netB'}]},
+        'si': {'Z0_single_ended_ohm': {'netB': 48.2},
+               'via_stub_length_mm': {'netB': 0.5},
+               'branch_dc_resistance_mohm': {'netB': 90.0},
+               'propagation': {'delay_ps': {'netB': 61.0}},
+               'marginal_formulas': {'netB': {'tight_coupling': True,
+                                               'thin_dielectric': False}}},
+        'bus_groups': {'groups': [{'label': 'bus:data',
+                                    'members': ['netA', 'netB']}]},
+    }
+
+
+def test_build_net_report_aggregates_per_net():
+    rep = build_net_report(_metrics_for_report())
+    b = rep['netB']
+    assert b['length_mm'] == 7.0                       # 3 + 4
+    assert b['vias'] == 1
+    assert b['z0_ohm'] == 48.2
+    assert b['delay_ps'] == 61.0
+    assert set(b['violations']) == {'width_ok', 'bend_class_ok'}
+    assert b['si_flags'] == ['tight_coupling']         # False 플래그는 제외
+    assert b['coupling'] == [{'net': 'netA', 'length_mm': 2.5}]
+    assert b['bus'] == 'bus:data'
+    assert b['verdict'] == 'violation'                 # 위반 있으면 violation
+
+
+def test_build_net_report_verdict_ok_and_warn():
+    # 경로 있는 넷 + coupling 파트너, 위반 없음 → warn
+    m = {'paths_mm': {'netW': [{'layer': 'L', 'points': [[0, 0], [2, 0]]}]},
+         'coupling': {'top_pairs': [{'pair': ['netW', 'netX'],
+                                      'length_mm': 1.2}]}}
+    assert build_net_report(m)['netW']['verdict'] == 'warn'
+    # 위반·플래그·coupling 전무 → ok
+    m2 = {'paths_mm': {'netC': [{'layer': 'L', 'points': [[0, 0], [1, 0]]}]}}
+    assert build_net_report(m2)['netC']['verdict'] == 'ok'
+
+
+def test_render_includes_net_report_inspector():
+    html_text = render_route_viewer({'dataset': 'D', 'bga': 'B',
+                                      'metrics': _metrics_for_report()})
+    assert '"reports"' in html_text        # inline 리포트 데이터
+    assert 'renderNetReport' in html_text  # 렌더 함수
+    assert 'showReport' in html_text
+    assert 'distToSeg' in html_text        # 트레이스 호버 히트테스트
+    assert 'id="report"' in html_text      # 리포트 패널
+    assert 'hoveredNet' in html_text

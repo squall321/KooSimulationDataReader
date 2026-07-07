@@ -25,6 +25,87 @@ _LAYER_COLORS = ['#1976d2', '#d32f2f', '#388e3c', '#f57c00',
                   '#7b1fa2', '#00838f', '#5d4037', '#455a64']
 
 
+def build_net_report(m: Dict[str, Any]) -> Dict[str, Any]:
+    """넷별 해석·문제점 리포트를 집계한다 (뷰어 호버 인스펙터용).
+
+    이미 eval이 계산한 넷별 데이터(임피던스/via stub/DC저항/전파지연/DRC 위반/
+    크로스토크/버스)를 넷 이름으로 모아 하나의 dict로 만든다. 뷰어는 이걸
+    inline으로 받아 호버 시 해석 결과를 표시한다.
+    """
+    si = m.get('si') or {}
+    by_field = (m.get('rule_check') or {}).get('by_field') or {}
+    top_pairs = (m.get('coupling') or {}).get('top_pairs') or []
+    paths = m.get('paths_mm') or {}
+    overlay = m.get('overlay_mm') or {}
+    z0 = si.get('Z0_single_ended_ohm') or {}
+    stub = si.get('via_stub_length_mm') or {}
+    dcr = si.get('branch_dc_resistance_mohm') or {}
+    delay = (si.get('propagation') or {}).get('delay_ps') or {}
+    marg = si.get('marginal_formulas') or {}
+
+    # 넷별 via 개수 (overlay.vias)
+    vias_per_net: Dict[str, int] = {}
+    for v in (overlay.get('vias') or []):
+        n = v.get('net')
+        if n:
+            vias_per_net[n] = vias_per_net.get(n, 0) + 1
+
+    # 넷별 크로스토크 파트너 (top_pairs 역인덱스)
+    partners: Dict[str, list] = {}
+    for p in top_pairs:
+        pr = p.get('pair') or []
+        if len(pr) == 2:
+            a, b = pr
+            partners.setdefault(a, []).append(
+                {'net': b, 'length_mm': p.get('length_mm')})
+            partners.setdefault(b, []).append(
+                {'net': a, 'length_mm': p.get('length_mm')})
+
+    # 넷별 DRC 위반 필드 (violators 역인덱스)
+    violations: Dict[str, list] = {}
+    for field, e in by_field.items():
+        for n in (e.get('violators') or []):
+            violations.setdefault(n, []).append(field)
+
+    # 넷별 버스 그룹 라벨
+    bus_of: Dict[str, str] = {}
+    for g in ((m.get('bus_groups') or {}).get('groups') or []):
+        for n in (g.get('members') or []):
+            bus_of[n] = g.get('label')
+
+    def _length_mm(net: str) -> float:
+        total = 0.0
+        for seg in paths.get(net, []):
+            pts = seg.get('points') or []
+            for i in range(1, len(pts)):
+                dx = pts[i][0] - pts[i - 1][0]
+                dy = pts[i][1] - pts[i - 1][1]
+                total += (dx * dx + dy * dy) ** 0.5
+        return round(total, 3)
+
+    nets = set(paths) | set(z0) | set(violations)
+    reports: Dict[str, Any] = {}
+    for n in sorted(nets):
+        si_flags = [k for k, v in (marg.get(n) or {}).items() if v]
+        v = violations.get(n, [])
+        cpl = partners.get(n, [])
+        reports[n] = {
+            'length_mm': _length_mm(n),
+            'vias': vias_per_net.get(n, 0),
+            'z0_ohm': z0.get(n),
+            'via_stub_mm': stub.get(n),
+            'dc_res_mohm': dcr.get(n),
+            'delay_ps': delay.get(n),
+            'violations': v,
+            'si_flags': si_flags,
+            'coupling': cpl,
+            'bus': bus_of.get(n),
+            'verdict': 'violation' if v else ('warn' if (si_flags or cpl)
+                                              else 'ok'),
+        }
+    return reports
+
+
 def render_route_viewer(result: Dict[str, Any]) -> str:
     m = result.get('metrics') or {}
     paths = m.get('paths_mm') or {}
@@ -43,6 +124,7 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
         'violators':  sorted(violators),
         'top_pairs':  (coupling.get('top_pairs') or [])[:10],
         'overlay':    overlay,
+        'reports':    build_net_report(m),
     }, default=str)
 
     return f"""<meta charset="utf-8">
@@ -52,8 +134,28 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
           display: flex; height: 100vh; }}
   #side {{ width: 260px; overflow-y: auto; border-right: 1px solid #ddd;
            padding: 10px; font-size: 12px; }}
-  #cv {{ flex: 1; }}
+  #cv {{ flex: 1; position: relative; }}
   canvas {{ display: block; background: #101418; }}
+  #report {{ position: absolute; left: 10px; bottom: 10px; width: 300px;
+             max-height: 62%; overflow-y: auto; display: none;
+             background: rgba(16,20,24,0.92); color: #e8eef2;
+             border: 1px solid #2b3440; border-radius: 6px;
+             padding: 9px 11px; font-size: 11.5px; line-height: 1.5;
+             font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+             box-shadow: 0 4px 18px rgba(0,0,0,0.45); }}
+  #report .rhead {{ font-size: 13px; font-weight: 600; margin-bottom: 5px;
+                    display: flex; align-items: center; gap: 7px; }}
+  #report .dot {{ width: 9px; height: 9px; border-radius: 50%;
+                  display: inline-block; }}
+  #report .bus {{ color: #8aa0b2; font-weight: 400; font-size: 10.5px; }}
+  #report table {{ width: 100%; border-collapse: collapse; }}
+  #report td {{ padding: 1px 0; }}
+  #report td.k {{ color: #8aa0b2; padding-right: 8px; white-space: nowrap; }}
+  #report td.v {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  #report .prob {{ color: #ff6b6b; margin-top: 5px; }}
+  #report .siflag {{ color: #ffb74d; margin-top: 3px; }}
+  #report .cpl {{ color: #7fb0e8; margin-top: 3px; }}
+  #report .ok {{ color: #66bb6a; margin-top: 5px; }}
   .net {{ cursor: pointer; padding: 2px 6px; border-radius: 4px; }}
   .net:hover {{ background: #eef; }}
   .net.sel {{ background: #cde; font-weight: 600; }}
@@ -80,17 +182,19 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
   <div id="nets"></div>
   <h3>Top coupling pairs</h3><div id="pairs"></div>
 </div>
-<div id="cv"><canvas id="c"></canvas></div>
+<div id="cv"><canvas id="c"></canvas><div id="report"></div></div>
 
 <script id="route-data" type="application/json">{payload}</script>
 <script>
 const DATA = JSON.parse(document.getElementById('route-data').textContent);
 const COLORS = {json.dumps(_LAYER_COLORS)};
+const REPORTS = DATA.reports || {{}};
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let selected = new Set();
 let selectedPkg = null;
 let hoveredPkg = null;
+let hoveredNet = null;
 let pkgMajorMinMm = 2.0;   // 최대 치수 ≥ 이 값이면 '큰 패키지'(라벨 상시)
 let layerVisible = {{}};
 let scale = 1, offX = 0, offY = 0, dragging = false, lastX = 0, lastY = 0;
@@ -133,6 +237,58 @@ function pkgMaxDimMm(pk) {{
 // '큰 패키지' = 최대 치수 임계 이상 또는 핀 8개 이상(큰 IC/커넥터).
 function pkgIsMajor(pk) {{
   return pkgMaxDimMm(pk) >= pkgMajorMinMm || (pk.pin_count || 0) >= 8;
+}}
+
+// --- net 인스펙터: 호버한 넷의 해석·문제점 리포트 ---
+const reportEl = document.getElementById('report');
+function _fmt(x, unit) {{
+  if (x === null || x === undefined) return '—';
+  const s = (typeof x === 'number')
+    ? (Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(2)) : x;
+  return s + (unit || '');
+}}
+function distToSeg(px, py, x0, y0, x1, y1) {{
+  const dx = x1 - x0, dy = y1 - y0;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 ? ((px - x0) * dx + (py - y0) * dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
+}}
+function renderNetReport(net) {{
+  const r = REPORTS[net];
+  if (!r) return '';
+  const dc = r.verdict === 'violation' ? '#ff6b6b'
+           : r.verdict === 'warn' ? '#ffb74d' : '#66bb6a';
+  let h = '<div class="rhead"><span class="dot" style="background:' + dc +
+          '"></span>' + net +
+          (r.bus ? ' <span class="bus">' + r.bus + '</span>' : '') + '</div>';
+  h += '<table>' +
+    '<tr><td class="k">length</td><td class="v">' + _fmt(r.length_mm, ' mm') + '</td></tr>' +
+    '<tr><td class="k">vias</td><td class="v">' + _fmt(r.vias) + '</td></tr>' +
+    '<tr><td class="k">Z0 single</td><td class="v">' + _fmt(r.z0_ohm, ' \\u03a9') + '</td></tr>' +
+    '<tr><td class="k">prop delay</td><td class="v">' + _fmt(r.delay_ps, ' ps') + '</td></tr>' +
+    '<tr><td class="k">via stub</td><td class="v">' + _fmt(r.via_stub_mm, ' mm') + '</td></tr>' +
+    '<tr><td class="k">DC res</td><td class="v">' + _fmt(r.dc_res_mohm, ' m\\u03a9') + '</td></tr>' +
+    '</table>';
+  if (r.violations && r.violations.length)
+    h += '<div class="prob">\\u26a0 DRC 위반: ' + r.violations.join(', ') + '</div>';
+  if (r.si_flags && r.si_flags.length)
+    h += '<div class="siflag">\\u25c7 SI 마진: ' + r.si_flags.join(', ') + '</div>';
+  if (r.coupling && r.coupling.length)
+    h += '<div class="cpl">\\u2194 coupling: ' + r.coupling.map(c =>
+         c.net + ' (' + _fmt(c.length_mm, 'mm') + ')').join(', ') + '</div>';
+  if ((!r.violations || !r.violations.length) &&
+      (!r.si_flags || !r.si_flags.length))
+    h += '<div class="ok">\\u2713 DRC/SI 플래그 없음</div>';
+  return h;
+}}
+function showReport(net) {{
+  if (net && REPORTS[net]) {{
+    reportEl.innerHTML = renderNetReport(net);
+    reportEl.style.display = 'block';
+  }} else {{
+    reportEl.style.display = 'none';
+  }}
 }}
 
 function _visibleForNet(net) {{
@@ -221,7 +377,7 @@ function drawOverlay() {{
 function draw() {{
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (const net in DATA.paths) {{
-    const isSel = selected.has(net);
+    const isSel = selected.has(net) || net === hoveredNet;
     const isViol = DATA.violators.includes(net);
     for (const seg of DATA.paths[net]) {{
       if (!layerVisible[seg.layer]) continue;
@@ -349,8 +505,10 @@ Object.keys(DATA.paths).sort().forEach(net => {{
     if (selected.has(net)) selected.delete(net);
     else selected.add(net);
     d.classList.toggle('sel');
+    showReport(net);
     draw();
   }};
+  d.onmouseenter = () => {{ showReport(net); }};
   d.ondblclick = () => {{ zoomToNet(net); }};
   netsDiv.appendChild(d);
 }});
@@ -390,20 +548,42 @@ canvas.addEventListener('mousemove', e => {{
     draw();
     return;
   }}
-  if (!showPkg) {{ if (hoveredPkg) {{ hoveredPkg = null; draw(); }} return; }}
-  // 커서가 들어온 패키지 중 가장 작은 것을 선택(큰 IC 위 작은 칩 우선).
-  const [wx, wy] = toWorld(e.offsetX, e.offsetY);
-  let hit = null, hitArea = Infinity;
-  for (const pk of (overlay.packages || [])) {{
-    const bb = pk.bbox_mm; if (!bb) continue;
-    const lox = Math.min(bb[0], bb[2]), hix = Math.max(bb[0], bb[2]);
-    const loy = Math.min(bb[1], bb[3]), hiy = Math.max(bb[1], bb[3]);
-    if (wx >= lox && wx <= hix && wy >= loy && wy <= hiy) {{
-      const a = (hix - lox) * (hiy - loy);
-      if (a < hitArea) {{ hitArea = a; hit = pk.ref_des; }}
+  let changed = false;
+  // 1) net 트레이스 호버(얇은 타깃) → 해석 리포트 + 하이라이트.
+  let netHit = null, best = 6;   // px 허용오차
+  for (const net in DATA.paths) {{
+    for (const seg of DATA.paths[net]) {{
+      const pts = seg.points;
+      for (let i = 1; i < pts.length; i++) {{
+        const a = toPx(pts[i - 1][0], pts[i - 1][1]);
+        const b = toPx(pts[i][0], pts[i][1]);
+        const dd = distToSeg(e.offsetX, e.offsetY, a[0], a[1], b[0], b[1]);
+        if (dd < best) {{ best = dd; netHit = net; }}
+      }}
     }}
   }}
-  if (hit !== hoveredPkg) {{ hoveredPkg = hit; draw(); }}
+  if (netHit !== hoveredNet) {{
+    hoveredNet = netHit; changed = true;
+    if (netHit) showReport(netHit);
+  }}
+  canvas.style.cursor = netHit ? 'pointer' : 'default';
+  // 2) 패키지 호버(면적) → 작은 패키지 라벨.
+  let pkgHit = null;
+  if (showPkg) {{
+    const [wx, wy] = toWorld(e.offsetX, e.offsetY);
+    let hitArea = Infinity;
+    for (const pk of (overlay.packages || [])) {{
+      const bb = pk.bbox_mm; if (!bb) continue;
+      const lox = Math.min(bb[0], bb[2]), hix = Math.max(bb[0], bb[2]);
+      const loy = Math.min(bb[1], bb[3]), hiy = Math.max(bb[1], bb[3]);
+      if (wx >= lox && wx <= hix && wy >= loy && wy <= hiy) {{
+        const a = (hix - lox) * (hiy - loy);
+        if (a < hitArea) {{ hitArea = a; pkgHit = pk.ref_des; }}
+      }}
+    }}
+  }}
+  if (pkgHit !== hoveredPkg) {{ hoveredPkg = pkgHit; changed = true; }}
+  if (changed) draw();
 }});
 window.addEventListener('mouseup', () => dragging = false);
 window.addEventListener('resize', () => {{ fit(); draw(); }});
