@@ -34,6 +34,12 @@ def _eval_with_paths():
                 'vias': [{'net': 'netB', 'xy': [5.0, 1.0], 'kind': 'signal',
                            'start_layer': 'LAY2', 'end_layer': 'COMP'}],
                 'keep_outs': [{'net': 'netA', 'bbox_mm': [2, 2, 4, 4]}],
+                'packages': [
+                    {'ref_des': 'U1', 'side': 'TOP', 'pin_count': 16,
+                     'bbox_mm': [0.0, -1.0, 2.0, 1.0]},
+                    {'ref_des': 'U2', 'side': 'BOT', 'pin_count': 4,
+                     'bbox_mm': [4.0, 0.0, 6.0, 2.0]},
+                ],
             },
             'rule_check': {'by_field': {
                 'width_ok': {'pass': False, 'violators': ['netB'],
@@ -129,3 +135,38 @@ def test_render_overlay_absent_still_valid():
     html_text = render_route_viewer(d)
     assert '<canvas' in html_text
     assert 'drawOverlay' in html_text
+
+
+# ---------------------------------------------------------------------------
+# Phase O — package outlines + refDes labels
+# ---------------------------------------------------------------------------
+
+
+def test_render_includes_package_data():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert '"packages"' in html_text
+    assert '"U1"' in html_text            # refDes flows into inline data
+    assert '"ref_des"' in html_text
+
+
+def test_render_package_toggle_and_helpers_present():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'ov-pkg' in html_text          # packages 토글 체크박스
+    assert 'showPkg' in html_text
+    assert 'netsInPackage' in html_text   # 클릭 → 주변 net 하이라이트
+    assert 'selectedPkg' in html_text
+
+
+def test_render_packages_side_panel_present():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'id="pkgs"' in html_text
+    assert '>Packages ' in html_text      # 사이드 섹션 헤더
+
+
+def test_render_packages_absent_still_valid():
+    """overlay에 packages 키 없어도 뷰어 JS는 정상 방출."""
+    d = _eval_with_paths()
+    d['metrics']['overlay_mm'].pop('packages', None)
+    html_text = render_route_viewer(d)
+    assert '<canvas' in html_text
+    assert 'netsInPackage' in html_text

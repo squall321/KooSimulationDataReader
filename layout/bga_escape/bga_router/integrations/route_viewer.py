@@ -69,7 +69,10 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
   <div><label><input type="checkbox" id="ov-pins" checked> pins</label></div>
   <div><label><input type="checkbox" id="ov-vias" checked> vias</label></div>
   <div><label><input type="checkbox" id="ov-ko" checked> keep-outs</label></div>
+  <div><label><input type="checkbox" id="ov-pkg" checked> packages</label></div>
   <h3>Layers</h3><div id="layers"></div>
+  <h3>Packages <span style="font-weight:400;color:#888">(click = nearby nets, dbl = zoom)</span></h3>
+  <div id="pkgs"></div>
   <h3>Nets <span style="font-weight:400;color:#888">(dbl-click = zoom)</span></h3>
   <div id="nets"></div>
   <h3>Top coupling pairs</h3><div id="pairs"></div>
@@ -83,6 +86,7 @@ const COLORS = {json.dumps(_LAYER_COLORS)};
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let selected = new Set();
+let selectedPkg = null;
 let layerVisible = {{}};
 let scale = 1, offX = 0, offY = 0, dragging = false, lastX = 0, lastY = 0;
 
@@ -113,14 +117,39 @@ function fit() {{
 }}
 function toPx(x, y) {{ return [x * scale + offX, -y * scale + offY]; }}
 
-const overlay = DATA.overlay || {{pins: [], vias: [], keep_outs: []}};
-let showPins = true, showVias = true, showKO = true;
+const overlay = DATA.overlay || {{pins: [], vias: [], keep_outs: [], packages: []}};
+let showPins = true, showVias = true, showKO = true, showPkg = true;
 
 function _visibleForNet(net) {{
   return !selected.size || selected.has(net);
 }}
 
 function drawOverlay() {{
+  // package outlines + refDes labels (behind net markers)
+  if (showPkg) {{
+    ctx.save();
+    ctx.font = '11px monospace';
+    for (const pk of (overlay.packages || [])) {{
+      const bb = pk.bbox_mm; if (!bb) continue;
+      const [px0, py0] = toPx(bb[0], bb[1]);
+      const [px1, py1] = toPx(bb[2], bb[3]);
+      const rx = Math.min(px0, px1), ry = Math.min(py0, py1);
+      const rw = Math.abs(px1 - px0), rh = Math.abs(py1 - py0);
+      // TOP = mauve, BOT = cyan. Selected package = bright outline.
+      const col = pk.ref_des === selectedPkg ? '#ffee58'
+                : pk.side === 'BOT' ? '#26c6da' : '#ce93d8';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = pk.ref_des === selectedPkg ? 2.5 : 1.5;
+      ctx.strokeRect(rx, ry, rw, rh);
+      const label = pk.ref_des || '';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(16,20,24,0.78)';
+      ctx.fillRect(rx, ry - 13, tw + 6, 13);
+      ctx.fillStyle = col;
+      ctx.fillText(label, rx + 3, ry - 3);
+    }}
+    ctx.restore();
+  }}
   // keep-out zones (behind markers)
   if (showKO) {{
     for (const ko of (overlay.keep_outs || [])) {{
@@ -215,6 +244,9 @@ document.getElementById('ov-vias').onchange = e => {{
 document.getElementById('ov-ko').onchange = e => {{
   showKO = e.target.checked; draw();
 }};
+document.getElementById('ov-pkg').onchange = e => {{
+  showPkg = e.target.checked; draw();
+}};
 
 // --- side panel ---
 const layersDiv = document.getElementById('layers');
@@ -229,12 +261,61 @@ layers.forEach(L => {{
   layersDiv.appendChild(d);
 }});
 
+// --- packages panel: click = highlight nets whose pins sit inside the
+//     package bbox (see the routing state *around* that component); dbl = zoom.
+function netsInPackage(pk) {{
+  const bb = pk.bbox_mm || [0, 0, 0, 0];
+  const lox = Math.min(bb[0], bb[2]), hix = Math.max(bb[0], bb[2]);
+  const loy = Math.min(bb[1], bb[3]), hiy = Math.max(bb[1], bb[3]);
+  const s = new Set();
+  for (const p of (overlay.pins || [])) {{
+    const x = p.xy[0], y = p.xy[1];
+    if (x >= lox && x <= hix && y >= loy && y <= hiy) s.add(p.net);
+  }}
+  return s;
+}}
+function zoomToBBox(bb) {{
+  const w = Math.abs(bb[2] - bb[0]) || 1, h = Math.abs(bb[3] - bb[1]) || 1;
+  scale = Math.min(canvas.width / w, canvas.height / h) * 0.5;
+  const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2;
+  offX = canvas.width / 2 - cx * scale;
+  offY = canvas.height / 2 + cy * scale;
+  draw();
+}}
+function syncNetHighlight() {{
+  document.querySelectorAll('#nets .net').forEach(el =>
+    el.classList.toggle('sel',
+      selected.has(el.textContent.replace(' ⚠', ''))));
+}}
+const pkgsDiv = document.getElementById('pkgs');
+(overlay.packages || []).slice().sort((a, b) =>
+    (a.ref_des || '').localeCompare(b.ref_des || '')).forEach(pk => {{
+  const d = document.createElement('div');
+  d.className = 'net';
+  const badge = pk.side === 'BOT' ? 'B' : 'T';
+  d.textContent = pk.ref_des + '  [' + badge + '·' + (pk.pin_count || 0) + 'p]';
+  d.onclick = () => {{
+    if (selectedPkg === pk.ref_des) {{
+      selectedPkg = null; selected = new Set();
+    }} else {{
+      selectedPkg = pk.ref_des; selected = netsInPackage(pk);
+    }}
+    document.querySelectorAll('#pkgs .net').forEach(el =>
+      el.classList.toggle('sel', el === d && selectedPkg !== null));
+    syncNetHighlight();
+    draw();
+  }};
+  d.ondblclick = () => {{ if (pk.bbox_mm) zoomToBBox(pk.bbox_mm); }};
+  pkgsDiv.appendChild(d);
+}});
+
 const netsDiv = document.getElementById('nets');
 Object.keys(DATA.paths).sort().forEach(net => {{
   const d = document.createElement('div');
   d.className = 'net' + (DATA.violators.includes(net) ? ' viol' : '');
   d.textContent = net + (DATA.violators.includes(net) ? ' ⚠' : '');
   d.onclick = () => {{
+    selectedPkg = null;
     if (selected.has(net)) selected.delete(net);
     else selected.add(net);
     d.classList.toggle('sel');
@@ -250,8 +331,9 @@ const pairsDiv = document.getElementById('pairs');
   d.className = 'pair';
   d.textContent = p.pair.join(' ↔ ') + ` (${{p.length_mm}}mm)`;
   d.onclick = () => {{
+    selectedPkg = null;
     selected = new Set(p.pair);
-    document.querySelectorAll('.net').forEach(el =>
+    document.querySelectorAll('#nets .net').forEach(el =>
       el.classList.toggle('sel',
         selected.has(el.textContent.replace(' ⚠', ''))));
     draw();

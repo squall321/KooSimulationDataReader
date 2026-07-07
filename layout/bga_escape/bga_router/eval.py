@@ -584,6 +584,61 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['overlay_mm'] = f'{type(e).__name__}: {e}'
 
+    # Phase O — package outlines + refDes labels for the viewer. Packages
+    # share the same absolute mm frame as paths_mm (placement centre expanded
+    # by footprint bbox via bbox_of), so the viewer overlays them directly and
+    # labels each by refDes. Filtered to the routed region (+margin) so the
+    # whole board's components don't clutter the escape view.
+    try:
+        from bga_router.metrics.package_features import (
+            build_packages, bbox_of)
+        eda = internals.get('eda')
+        pkg_out: list = []
+        if eda is not None and getattr(eda, 'components', None):
+            # Region bounds from every net geometry we have: routed paths plus
+            # the pin/via markers. Pins exist even when routing found no path,
+            # so the shown packages still centre on the BGA escape field.
+            px0 = py0 = float('inf')
+            px1 = py1 = float('-inf')
+
+            def _acc(x, y):
+                nonlocal px0, py0, px1, py1
+                px0 = min(px0, x); py0 = min(py0, y)
+                px1 = max(px1, x); py1 = max(py1, y)
+
+            for segs in (metrics.get('paths_mm') or {}).values():
+                for seg in segs:
+                    for x, y in seg['points']:
+                        _acc(x, y)
+            _ovm = metrics.get('overlay_mm') or {}
+            for mk in (_ovm.get('pins') or []):
+                xy = mk.get('xy')
+                if xy:
+                    _acc(xy[0], xy[1])
+            for mk in (_ovm.get('vias') or []):
+                xy = mk.get('xy')
+                if xy:
+                    _acc(xy[0], xy[1])
+            have_bounds = px1 >= px0
+            margin = 5.0
+            for p in build_packages(eda):
+                x0, y0, x1, y1 = bbox_of(p)
+                if have_bounds and (x1 < px0 - margin or x0 > px1 + margin or
+                                    y1 < py0 - margin or y0 > py1 + margin):
+                    continue
+                pkg_out.append({
+                    'ref_des': p.ref_des, 'side': p.side,
+                    'pin_count': p.pin_count,
+                    'bbox_mm': [round(x0, 4), round(y0, 4),
+                                round(x1, 4), round(y1, 4)]})
+        ov = metrics.get('overlay_mm')
+        if ov is None:
+            ov = {'pins': [], 'vias': [], 'keep_outs': []}
+            metrics['overlay_mm'] = ov
+        ov['packages'] = pkg_out
+    except Exception as e:
+        phase_c_errors['packages_overlay'] = f'{type(e).__name__}: {e}'
+
     if phase_b_errors:
         metrics['phase_b_errors'] = phase_b_errors
     if phase_c_errors:
