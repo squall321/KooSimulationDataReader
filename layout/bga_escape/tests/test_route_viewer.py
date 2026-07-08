@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from bga_router.integrations.route_viewer import (
+    build_copper_overlay,
     build_net_report,
     render_route_viewer,
     write_route_viewer,
@@ -244,3 +245,61 @@ def test_render_includes_net_report_inspector():
     assert 'distToSeg' in html_text        # 트레이스 호버 히트테스트
     assert 'id="report"' in html_text      # 리포트 패널
     assert 'hoveredNet' in html_text
+
+
+# ---------------------------------------------------------------------------
+# Phase Q — 원본 ODB++ 동박 오버레이
+# ---------------------------------------------------------------------------
+
+
+def _em_data():
+    return {'layers': {
+        'COMP': {'z_bottom': 0, 'z_top': 0.03, 'nets': {
+            'netB': {'polygons': [{'type': 'fill',
+                                    'outer': [[0, 0], [2, 0], [2, 1], [0, 1]]}]},
+            'gnd': {'polygons': [{'type': 'fill',
+                                   'outer': [[100, 100], [102, 100],
+                                             [102, 101]]}]}}},
+        'LAY2': {'z_bottom': -0.1, 'z_top': -0.07, 'nets': {
+            'netB': {'polygons': [{'type': 'fill',
+                                    'outer': [[0, 0], [1, 0], [1, 1]]}]}}}}}
+
+
+def test_build_copper_overlay_flatten():
+    cop = build_copper_overlay(_em_data())
+    assert cop['truncated'] is False
+    polys = cop['polys']
+    assert len(polys) == 3                 # netB×2 + gnd×1
+    assert all({'net', 'layer', 'outer'} <= set(p) for p in polys)
+    assert {p['layer'] for p in polys} == {'COMP', 'LAY2'}
+
+
+def test_build_copper_overlay_region_filter():
+    # 원점 주변 영역 → (100,100)의 gnd 폴리곤 제외.
+    cop = build_copper_overlay(_em_data(), region_bbox=(-1, -1, 5, 5))
+    nl = {(p['net'], p['layer']) for p in cop['polys']}
+    assert ('netB', 'COMP') in nl
+    assert ('gnd', 'COMP') not in nl
+
+
+def test_build_copper_overlay_truncation():
+    big = {'layers': {'L': {'nets': {
+        f'n{i}': {'polygons': [{'outer': [[0, 0], [1, 0], [1, 1]]}]}
+        for i in range(10)}}}}
+    cop = build_copper_overlay(big, max_polys=5)
+    assert cop['truncated'] is True
+    assert len(cop['polys']) == 5
+
+
+def test_render_includes_copper_when_em_data():
+    html_text = render_route_viewer(_eval_with_paths(), em_data=_em_data())
+    assert 'drawCopper' in html_text
+    assert 'buildCopperCache' in html_text
+    assert 'ov-copper' in html_text
+    assert '"copper"' in html_text
+
+
+def test_render_without_em_data_copper_empty():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert '"copper": []' in html_text     # em_data 없으면 빈 배열
+    assert 'drawCopper' in html_text       # JS는 항상 방출

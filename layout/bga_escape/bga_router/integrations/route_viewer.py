@@ -106,7 +106,64 @@ def build_net_report(m: Dict[str, Any]) -> Dict[str, Any]:
     return reports
 
 
-def render_route_viewer(result: Dict[str, Any]) -> str:
+def _region_bbox(paths: Dict[str, Any], overlay: Dict[str, Any],
+                  margin: float = 3.0):
+    """라우팅 영역 bbox(+margin)를 paths+pins+vias 좌표에서 잡는다.
+
+    원본 동박을 이 영역으로 잘라 전체 보드 폭주를 막는다. 좌표 없으면 None.
+    """
+    xs: list = []
+    ys: list = []
+    for segs in paths.values():
+        for seg in segs:
+            for x, y in seg.get('points', []):
+                xs.append(x); ys.append(y)
+    for mk in (overlay.get('pins') or []) + (overlay.get('vias') or []):
+        xy = mk.get('xy')
+        if xy:
+            xs.append(xy[0]); ys.append(xy[1])
+    if not xs:
+        return None
+    return (min(xs) - margin, min(ys) - margin,
+            max(xs) + margin, max(ys) + margin)
+
+
+def build_copper_overlay(em_data: Dict[str, Any], *, region_bbox=None,
+                          max_polys: int = 6000) -> Dict[str, Any]:
+    """원본 ODB++ 동박(em_data: layers→nets→polygons)을 뷰어용으로 평탄화.
+
+    반환: {'polys': [{net, layer, outer:[[x,y],...]}], 'truncated': bool}.
+    region_bbox=(x0,y0,x1,y1)를 주면 폴리곤 bbox가 이 영역과 겹치는 것만 남긴다.
+    max_polys를 넘으면 잘라내고 truncated=True(무음 절단 금지 — 호출측이 표기).
+    """
+    layers = (em_data or {}).get('layers') or {}
+    out: list = []
+    truncated = False
+    for lname, ldata in layers.items():
+        nets = (ldata or {}).get('nets') or {}
+        for net, ndata in nets.items():
+            for poly in (ndata or {}).get('polygons', []):
+                outer = poly.get('outer') or []
+                if len(outer) < 3:
+                    continue
+                if region_bbox is not None:
+                    xs = [p[0] for p in outer]
+                    ys = [p[1] for p in outer]
+                    if (max(xs) < region_bbox[0] or min(xs) > region_bbox[2] or
+                            max(ys) < region_bbox[1] or
+                            min(ys) > region_bbox[3]):
+                        continue
+                out.append({
+                    'net': net, 'layer': lname,
+                    'outer': [[round(p[0], 4), round(p[1], 4)]
+                              for p in outer]})
+                if len(out) >= max_polys:
+                    return {'polys': out, 'truncated': True}
+    return {'polys': out, 'truncated': truncated}
+
+
+def render_route_viewer(result: Dict[str, Any],
+                         em_data: Dict[str, Any] = None) -> str:
     m = result.get('metrics') or {}
     paths = m.get('paths_mm') or {}
     rule_check = m.get('rule_check') or {}
@@ -119,13 +176,26 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
         violators.update(e.get('violators') or [])
 
     overlay = m.get('overlay_mm') or {}
+    copper = {'polys': [], 'truncated': False}
+    if em_data:
+        copper = build_copper_overlay(
+            em_data, region_bbox=_region_bbox(paths, overlay))
     payload = json.dumps({
         'paths':      paths,
         'violators':  sorted(violators),
         'top_pairs':  (coupling.get('top_pairs') or [])[:10],
         'overlay':    overlay,
         'reports':    build_net_report(m),
+        'copper':     copper['polys'],
+        'copper_truncated': copper['truncated'],
     }, default=str)
+
+    copper_ui = ''
+    if copper['polys']:
+        n = len(copper['polys'])
+        note = f'{n}+ (일부 생략)' if copper['truncated'] else f'{n} polys'
+        copper_ui = ('<div style="color:#8aa0b2;font-size:10px;margin:1px 0 3px">'
+                     f'ODB++ 원본 동박 — {note}</div>')
 
     return f"""<meta charset="utf-8">
 <title>Route viewer — {dataset} / {bga}</title>
@@ -172,6 +242,8 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
   <div><label><input type="checkbox" id="ov-vias" checked> vias</label></div>
   <div><label><input type="checkbox" id="ov-ko" checked> keep-outs</label></div>
   <div><label><input type="checkbox" id="ov-pkg" checked> packages</label></div>
+  <div><label><input type="checkbox" id="ov-copper" checked> orig. copper</label></div>
+  {copper_ui}
   <h3>Layers</h3><div id="layers"></div>
   <h3>Packages <span style="font-weight:400;color:#888">(click = nearby nets, dbl = zoom)</span></h3>
   <div style="color:#888;margin:2px 0 4px">label ≥ <input id="pkg-thresh" type="number"
@@ -189,6 +261,7 @@ def render_route_viewer(result: Dict[str, Any]) -> str:
 const DATA = JSON.parse(document.getElementById('route-data').textContent);
 const COLORS = {json.dumps(_LAYER_COLORS)};
 const REPORTS = DATA.reports || {{}};
+const COPPER = DATA.copper || [];
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let selected = new Set();
@@ -215,6 +288,12 @@ const layers = [...layerSet].sort();
 layers.forEach(L => layerVisible[L] = true);
 const layerColor = {{}};
 layers.forEach((L, i) => layerColor[L] = COLORS[i % COLORS.length]);
+// 원본 동박 레이어 색: trace 레이어와 이름이 같으면 공유, 아니면 팔레트 확장.
+const copperLayers = [...new Set(COPPER.map(p => p.layer))].sort();
+const copperColor = {{}};
+copperLayers.forEach((L, i) => {{
+  copperColor[L] = layerColor[L] || COLORS[(layers.length + i) % COLORS.length];
+}});
 
 function fit() {{
   canvas.width = canvas.parentElement.clientWidth;
@@ -229,6 +308,7 @@ function toWorld(px, py) {{ return [(px - offX) / scale, (offY - py) / scale]; }
 
 const overlay = DATA.overlay || {{pins: [], vias: [], keep_outs: [], packages: []}};
 let showPins = true, showVias = true, showKO = true, showPkg = true;
+let showCopper = true;
 
 function pkgMaxDimMm(pk) {{
   const bb = pk.bbox_mm || [0, 0, 0, 0];
@@ -374,8 +454,68 @@ function drawOverlay() {{
   }}
 }}
 
+// 원본 ODB++ 동박(fill 폴리곤)을 트레이스 뒤 베이스 레이어로 그린다.
+// 폴리곤이 많아(수천) hover마다 재렌더하면 렉이 걸리므로 오프스크린 캔버스에
+// 캐시해 blit한다. 팬은 blit 평행이동, 줌/레이어 변경만 캐시 재생성, hover는
+// 해당 넷 폴리곤만 라이브 하이라이트한다.
+let copperCanvas = null, copperScaleKey = null, copperLayerKey = '';
+let copperOffX0 = 0, copperOffY0 = 0;
+function _copperPath(c, pts) {{
+  c.beginPath();
+  for (let i = 0; i < pts.length; i++) {{
+    const [px, py] = toPx(pts[i][0], pts[i][1]);
+    if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+  }}
+  c.closePath();
+}}
+function buildCopperCache() {{
+  if (!copperCanvas) copperCanvas = document.createElement('canvas');
+  copperCanvas.width = canvas.width;
+  copperCanvas.height = canvas.height;
+  const c = copperCanvas.getContext('2d');
+  c.clearRect(0, 0, copperCanvas.width, copperCanvas.height);
+  copperOffX0 = offX; copperOffY0 = offY;
+  for (const poly of COPPER) {{
+    if (poly.layer in layerVisible && !layerVisible[poly.layer]) continue;
+    const pts = poly.outer;
+    if (!pts || pts.length < 3) continue;
+    _copperPath(c, pts);
+    const col = copperColor[poly.layer] || '#6b7a86';
+    c.fillStyle = col; c.globalAlpha = 0.12; c.fill();
+    c.strokeStyle = col; c.globalAlpha = 0.3; c.lineWidth = 0.7; c.stroke();
+  }}
+  c.globalAlpha = 1.0;
+  copperScaleKey = scale;
+  copperLayerKey = JSON.stringify(layerVisible);
+}}
+function drawCopper() {{
+  if (copperScaleKey !== scale ||
+      copperLayerKey !== JSON.stringify(layerVisible) || !copperCanvas ||
+      copperCanvas.width !== canvas.width ||
+      copperCanvas.height !== canvas.height) {{
+    buildCopperCache();
+  }}
+  ctx.drawImage(copperCanvas, offX - copperOffX0, offY - copperOffY0);
+  // 호버한 넷의 원본 동박만 밝게(라이브, 소량).
+  if (hoveredNet) {{
+    for (const poly of COPPER) {{
+      if (poly.net !== hoveredNet) continue;
+      if (poly.layer in layerVisible && !layerVisible[poly.layer]) continue;
+      const pts = poly.outer;
+      if (!pts || pts.length < 3) continue;
+      _copperPath(ctx, pts);
+      const col = copperColor[poly.layer] || '#6b7a86';
+      ctx.fillStyle = col; ctx.globalAlpha = 0.5; ctx.fill();
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+    }}
+  }}
+}}
+
 function draw() {{
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (showCopper) drawCopper();
   for (const net in DATA.paths) {{
     const isSel = selected.has(net) || net === hoveredNet;
     const isViol = DATA.violators.includes(net);
@@ -429,6 +569,10 @@ document.getElementById('ov-ko').onchange = e => {{
 document.getElementById('ov-pkg').onchange = e => {{
   showPkg = e.target.checked; draw();
 }};
+{{
+  const cb = document.getElementById('ov-copper');
+  if (cb) cb.onchange = e => {{ showCopper = e.target.checked; draw(); }};
+}}
 document.getElementById('pkg-thresh').oninput = e => {{
   const v = parseFloat(e.target.value);
   if (!isNaN(v)) {{ pkgMajorMinMm = v; draw(); }}
@@ -593,9 +737,13 @@ fit(); draw();
 """
 
 
-def write_route_viewer(result_path: str | Path, out_path: str | Path) -> Path:
+def write_route_viewer(result_path: str | Path, out_path: str | Path,
+                        em_data_path: str | Path = None) -> Path:
     data = json.loads(Path(result_path).read_text())
-    text = render_route_viewer(data)
+    em_data = None
+    if em_data_path:
+        em_data = json.loads(Path(em_data_path).read_text())
+    text = render_route_viewer(data, em_data=em_data)
     op = Path(out_path)
     op.parent.mkdir(parents=True, exist_ok=True)
     op.write_text(text)
