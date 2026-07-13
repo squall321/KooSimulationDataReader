@@ -303,3 +303,34 @@ def test_render_without_em_data_copper_empty():
     html_text = render_route_viewer(_eval_with_paths())
     assert '"copper": []' in html_text     # em_data 없으면 빈 배열
     assert 'drawCopper' in html_text       # JS는 항상 방출
+
+
+# ---------------------------------------------------------------------------
+# Phase R — 실폭 트레이스 · 패키지 앞/뒷면 필터 · 레이어 뷰어(solo/다층)
+# ---------------------------------------------------------------------------
+
+
+def test_render_real_trace_width():
+    d = _eval_with_paths()
+    d['metrics']['net_width_mm'] = {'netA': 0.09, 'netB': 0.075}
+    html_text = render_route_viewer(d)
+    assert '"widths"' in html_text          # 넷별 폭 데이터
+    assert 'WIDTHS' in html_text
+    assert '* scale' in html_text           # 폭을 배율로 스케일(실폭)
+
+
+def test_render_package_side_filter():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'pkgSideVisible' in html_text
+    assert 'name="pkgside"' in html_text    # both/top/bot 라디오
+    assert "value=\"top\"" in html_text
+    assert "value=\"bot\"" in html_text
+
+
+def test_render_layer_viewer_controls():
+    html_text = render_route_viewer(_eval_with_paths())
+    assert 'syncLayerChecks' in html_text
+    assert 'lay-all' in html_text           # all/none
+    assert 'lay-none' in html_text
+    assert 'class="solo"' in html_text      # 단층 solo
+    assert 'LAYER_ORDER' in html_text       # stackup 순서

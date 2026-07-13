@@ -552,6 +552,18 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
     except Exception as e:
         phase_c_errors['paths_mm'] = f'{type(e).__name__}: {e}'
 
+    # Phase R — per-net trace width (mm) so the viewer can draw real copper
+    # width instead of thickness-less centrelines.
+    try:
+        net_width: Dict[str, float] = {}
+        for t in tasks:
+            w = getattr(t.rule, 'width_mm', None)
+            if w and t.net_name not in net_width:
+                net_width[t.net_name] = round(float(w), 4)
+        metrics['net_width_mm'] = net_width
+    except Exception as e:
+        phase_c_errors['net_width_mm'] = f'{type(e).__name__}: {e}'
+
     # Phase J-2 — overlay geometry for the viewer: pin endpoints, vias,
     # keep-out zones. Lets the Canvas viewer draw markers over the copper.
     try:
@@ -621,7 +633,11 @@ def _populate_extended_metrics(metrics: Dict[str, Any],
                     _acc(xy[0], xy[1])
             have_bounds = px1 >= px0
             margin = 5.0
-            for p in build_packages(eda):
+            # eda_path 를 주어야 resolve_side 가 comp_+_top/bot 레이어로 앞/뒷면을
+            # 판정한다(없으면 mirrored fallback → 전부 TOP 로 뭉개짐).
+            _step = getattr(entry, 'step', None) or 'mentor'
+            _eda_path = f'{entry.path}/steps/{_step}/eda/data'
+            for p in build_packages(eda, eda_path=_eda_path):
                 x0, y0, x1, y1 = bbox_of(p)
                 if have_bounds and (x1 < px0 - margin or x0 > px1 + margin or
                                     y1 < py0 - margin or y0 > py1 + margin):

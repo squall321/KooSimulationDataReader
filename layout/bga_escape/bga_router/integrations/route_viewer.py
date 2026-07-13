@@ -177,17 +177,26 @@ def render_route_viewer(result: Dict[str, Any],
 
     overlay = m.get('overlay_mm') or {}
     copper = {'polys': [], 'truncated': False}
+    layer_order: list = []
     if em_data:
         copper = build_copper_overlay(
             em_data, region_bbox=_region_bbox(paths, overlay))
+        # stackup 순서(위→아래) = z_top 오름차순.
+        lz = []
+        for ln, ld in (em_data.get('layers') or {}).items():
+            zt = (ld or {}).get('z_top')
+            lz.append((zt if zt is not None else 0.0, ln))
+        layer_order = [ln for _, ln in sorted(lz)]
     payload = json.dumps({
         'paths':      paths,
         'violators':  sorted(violators),
         'top_pairs':  (coupling.get('top_pairs') or [])[:10],
         'overlay':    overlay,
         'reports':    build_net_report(m),
+        'widths':     m.get('net_width_mm') or {},
         'copper':     copper['polys'],
         'copper_truncated': copper['truncated'],
+        'layer_order': layer_order,
     }, default=str)
 
     copper_ui = ''
@@ -249,6 +258,10 @@ def render_route_viewer(result: Dict[str, Any],
   <div style="color:#888;margin:2px 0 4px">label ≥ <input id="pkg-thresh" type="number"
     value="2" min="0" step="0.5" style="width:46px"> mm
     <span style="font-size:10px">(smaller: hover)</span></div>
+  <div style="color:#888;margin:2px 0 4px">side:
+    <label><input type="radio" name="pkgside" value="all" checked> <span style="color:#ce93d8">■</span>both</label>
+    <label><input type="radio" name="pkgside" value="top"> top</label>
+    <label><input type="radio" name="pkgside" value="bot"> <span style="color:#26c6da">■</span>bot</label></div>
   <div id="pkgs"></div>
   <h3>Nets <span style="font-weight:400;color:#888">(dbl-click = zoom)</span></h3>
   <div id="nets"></div>
@@ -262,12 +275,20 @@ const DATA = JSON.parse(document.getElementById('route-data').textContent);
 const COLORS = {json.dumps(_LAYER_COLORS)};
 const REPORTS = DATA.reports || {{}};
 const COPPER = DATA.copper || [];
+const WIDTHS = DATA.widths || {{}};
+const LAYER_ORDER = DATA.layer_order || [];
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let selected = new Set();
 let selectedPkg = null;
 let hoveredPkg = null;
 let hoveredNet = null;
+let pkgSide = 'all';   // all | top | bot — 패키지 앞/뒷면 필터
+function pkgSideVisible(pk) {{
+  if (pkgSide === 'all') return true;
+  if (pkgSide === 'bot') return pk.side === 'BOT';
+  return pk.side !== 'BOT';   // top
+}}
 let pkgMajorMinMm = 2.0;   // 최대 치수 ≥ 이 값이면 '큰 패키지'(라벨 상시)
 let layerVisible = {{}};
 let scale = 1, offX = 0, offY = 0, dragging = false, lastX = 0, lastY = 0;
@@ -284,16 +305,17 @@ for (const net in DATA.paths) {{
     }}
   }}
 }}
-const layers = [...layerSet].sort();
+// 트레이스+동박이 실제로 있는 레이어를 stackup(위→아래) 순서로 통합.
+const contentLayers = new Set([...layerSet, ...COPPER.map(p => p.layer)]);
+const layers = (LAYER_ORDER.length
+  ? LAYER_ORDER.filter(L => contentLayers.has(L))
+  : [...contentLayers].sort());
+for (const L of contentLayers) if (!layers.includes(L)) layers.push(L);
 layers.forEach(L => layerVisible[L] = true);
 const layerColor = {{}};
 layers.forEach((L, i) => layerColor[L] = COLORS[i % COLORS.length]);
-// 원본 동박 레이어 색: trace 레이어와 이름이 같으면 공유, 아니면 팔레트 확장.
-const copperLayers = [...new Set(COPPER.map(p => p.layer))].sort();
-const copperColor = {{}};
-copperLayers.forEach((L, i) => {{
-  copperColor[L] = layerColor[L] || COLORS[(layers.length + i) % COLORS.length];
-}});
+// 같은 레이어의 트레이스와 원본 동박은 같은 색을 쓴다.
+const copperColor = layerColor;
 
 function fit() {{
   canvas.width = canvas.parentElement.clientWidth;
@@ -384,6 +406,7 @@ function drawOverlay() {{
     ctx.font = '11px monospace';
     const labels = [];   // 라벨은 모든 외곽 위에 그리도록 2-pass.
     for (const pk of (overlay.packages || [])) {{
+      if (!pkgSideVisible(pk)) continue;
       const bb = pk.bbox_mm; if (!bb) continue;
       const [px0, py0] = toPx(bb[0], bb[1]);
       const [px1, py1] = toPx(bb[2], bb[3]);
@@ -481,8 +504,8 @@ function buildCopperCache() {{
     if (!pts || pts.length < 3) continue;
     _copperPath(c, pts);
     const col = copperColor[poly.layer] || '#6b7a86';
-    c.fillStyle = col; c.globalAlpha = 0.12; c.fill();
-    c.strokeStyle = col; c.globalAlpha = 0.3; c.lineWidth = 0.7; c.stroke();
+    c.fillStyle = col; c.globalAlpha = 0.2; c.fill();
+    c.strokeStyle = col; c.globalAlpha = 0.4; c.lineWidth = 0.7; c.stroke();
   }}
   c.globalAlpha = 1.0;
   copperScaleKey = scale;
@@ -516,9 +539,13 @@ function drawCopper() {{
 function draw() {{
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (showCopper) drawCopper();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   for (const net in DATA.paths) {{
     const isSel = selected.has(net) || net === hoveredNet;
     const isViol = DATA.violators.includes(net);
+    // 실제 트레이스 폭(mm)을 화면 배율로 — 줌하면 두께가 커진다. 최소 1.2px.
+    const wpx = Math.max(1.2, (WIDTHS[net] || 0.075) * scale);
     for (const seg of DATA.paths[net]) {{
       if (!layerVisible[seg.layer]) continue;
       ctx.beginPath();
@@ -526,7 +553,7 @@ function draw() {{
         const [px, py] = toPx(x, y);
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       }});
-      ctx.lineWidth = isSel ? 4 : 1.5;
+      ctx.lineWidth = isSel ? Math.max(wpx, 3) : wpx;
       ctx.strokeStyle = isSel ? '#ffee58'
                        : isViol ? '#ef5350'
                        : layerColor[seg.layer];
@@ -577,16 +604,53 @@ document.getElementById('pkg-thresh').oninput = e => {{
   const v = parseFloat(e.target.value);
   if (!isNaN(v)) {{ pkgMajorMinMm = v; draw(); }}
 }};
+document.querySelectorAll('input[name="pkgside"]').forEach(r => {{
+  r.onchange = e => {{
+    pkgSide = e.target.value;
+    document.querySelectorAll('#pkgs .net').forEach(el => {{
+      const s = el.dataset.side;
+      const vis = pkgSide === 'all'
+        || (pkgSide === 'bot' ? s === 'BOT' : s !== 'BOT');
+      el.style.display = vis ? '' : 'none';
+    }});
+    draw();
+  }};
+}});
 
 // --- side panel ---
 const layersDiv = document.getElementById('layers');
+function syncLayerChecks() {{
+  document.querySelectorAll('#layers input[type=checkbox]').forEach(cb => {{
+    cb.checked = !!layerVisible[cb.dataset.layer];
+  }});
+}}
+{{
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'margin:0 0 3px;color:#888;font-size:10px';
+  hdr.innerHTML = '<a href="#" id="lay-all">all</a> · '
+    + '<a href="#" id="lay-none">none</a> '
+    + '<span style="color:#667">· 위→아래(stackup)</span>';
+  layersDiv.appendChild(hdr);
+  hdr.querySelector('#lay-all').onclick = ev => {{ ev.preventDefault();
+    layers.forEach(L => layerVisible[L] = true); syncLayerChecks(); draw(); }};
+  hdr.querySelector('#lay-none').onclick = ev => {{ ev.preventDefault();
+    layers.forEach(L => layerVisible[L] = false); syncLayerChecks(); draw(); }};
+}}
 layers.forEach(L => {{
   const d = document.createElement('div');
   d.className = 'layer-toggle';
-  d.innerHTML = `<label><input type="checkbox" checked> ` +
-    `<span style="color:${{layerColor[L]}}">■</span> ${{L}}</label>`;
+  d.innerHTML = `<label><input type="checkbox" data-layer="${{L}}" checked> `
+    + `<span style="color:${{layerColor[L]}}">■</span> ${{L}}</label>`
+    + ` <a href="#" class="solo" style="color:#7fb0e8;font-size:10px">solo</a>`;
   d.querySelector('input').onchange = e => {{
     layerVisible[L] = e.target.checked; draw();
+  }};
+  // solo: 이 층만 보기 ↔ 다시 누르면 전체 복원.
+  d.querySelector('.solo').onclick = ev => {{
+    ev.preventDefault();
+    const onlyThis = layers.every(x => (x === L) === !!layerVisible[x]);
+    layers.forEach(x => layerVisible[x] = onlyThis ? true : (x === L));
+    syncLayerChecks(); draw();
   }};
   layersDiv.appendChild(d);
 }});
@@ -622,6 +686,7 @@ const pkgsDiv = document.getElementById('pkgs');
     (a.ref_des || '').localeCompare(b.ref_des || '')).forEach(pk => {{
   const d = document.createElement('div');
   d.className = 'net';
+  d.dataset.side = pk.side;
   const badge = pk.side === 'BOT' ? 'B' : 'T';
   d.textContent = pk.ref_des + '  [' + badge + '·' + (pk.pin_count || 0) + 'p]';
   d.onclick = () => {{
@@ -717,6 +782,7 @@ canvas.addEventListener('mousemove', e => {{
     const [wx, wy] = toWorld(e.offsetX, e.offsetY);
     let hitArea = Infinity;
     for (const pk of (overlay.packages || [])) {{
+      if (!pkgSideVisible(pk)) continue;
       const bb = pk.bbox_mm; if (!bb) continue;
       const lox = Math.min(bb[0], bb[2]), hix = Math.max(bb[0], bb[2]);
       const loy = Math.min(bb[1], bb[3]), hiy = Math.max(bb[1], bb[3]);
