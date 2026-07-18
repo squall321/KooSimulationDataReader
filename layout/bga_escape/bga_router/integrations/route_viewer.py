@@ -129,19 +129,29 @@ def _region_bbox(paths: Dict[str, Any], overlay: Dict[str, Any],
 
 
 def build_copper_overlay(em_data: Dict[str, Any], *, region_bbox=None,
-                          max_polys: int = 6000) -> Dict[str, Any]:
+                          per_layer_max: int = 2500,
+                          max_polys: int = 16000) -> Dict[str, Any]:
     """원본 ODB++ 동박(em_data: layers→nets→polygons)을 뷰어용으로 평탄화.
 
-    반환: {'polys': [{net, layer, outer:[[x,y],...]}], 'truncated': bool}.
+    반환: {'polys': [{net, layer, outer:[[x,y],...]}], 'truncated': bool,
+           'truncated_layers': [layer,...]}.
     region_bbox=(x0,y0,x1,y1)를 주면 폴리곤 bbox가 이 영역과 겹치는 것만 남긴다.
-    max_polys를 넘으면 잘라내고 truncated=True(무음 절단 금지 — 호출측이 표기).
+
+    캡 정책. **레이어별 상한(per_layer_max)** 을 두어 한 조밀 평면이 예산을
+    독식하지 않게 한다. 그래서 어떤 층을 solo 로 보면 그 층은 (per_layer_max
+    까지) 온전히 보인다. max_polys 는 전역 안전 상한(pathological 보드 방어).
+    잘린 레이어는 truncated_layers 로 표기(무음 절단 금지).
     """
     layers = (em_data or {}).get('layers') or {}
     out: list = []
-    truncated = False
+    truncated_layers: set = set()
     for lname, ldata in layers.items():
         nets = (ldata or {}).get('nets') or {}
+        cnt = 0
+        done = False
         for net, ndata in nets.items():
+            if done:
+                break
             for poly in (ndata or {}).get('polygons', []):
                 outer = poly.get('outer') or []
                 if len(outer) < 3:
@@ -153,13 +163,21 @@ def build_copper_overlay(em_data: Dict[str, Any], *, region_bbox=None,
                             max(ys) < region_bbox[1] or
                             min(ys) > region_bbox[3]):
                         continue
+                if cnt >= per_layer_max:
+                    truncated_layers.add(lname)
+                    done = True
+                    break
                 out.append({
                     'net': net, 'layer': lname,
                     'outer': [[round(p[0], 4), round(p[1], 4)]
                               for p in outer]})
+                cnt += 1
                 if len(out) >= max_polys:
-                    return {'polys': out, 'truncated': True}
-    return {'polys': out, 'truncated': truncated}
+                    truncated_layers.add(lname)
+                    return {'polys': out, 'truncated': True,
+                            'truncated_layers': sorted(truncated_layers)}
+    return {'polys': out, 'truncated': bool(truncated_layers),
+            'truncated_layers': sorted(truncated_layers)}
 
 
 def render_route_viewer(result: Dict[str, Any],
@@ -202,7 +220,11 @@ def render_route_viewer(result: Dict[str, Any],
     copper_ui = ''
     if copper['polys']:
         n = len(copper['polys'])
-        note = f'{n}+ (일부 생략)' if copper['truncated'] else f'{n} polys'
+        if copper['truncated']:
+            tl = ', '.join(copper.get('truncated_layers') or [])
+            note = f'{n} polys — 층 일부 생략({tl}); solo로 층별 확인'
+        else:
+            note = f'{n} polys (전량)'
         copper_ui = ('<div style="color:#8aa0b2;font-size:10px;margin:1px 0 3px">'
                      f'ODB++ 원본 동박 — {note}</div>')
 

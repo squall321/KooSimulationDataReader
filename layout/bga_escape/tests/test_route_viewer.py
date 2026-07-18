@@ -291,6 +291,21 @@ def test_build_copper_overlay_truncation():
     assert len(cop['polys']) == 5
 
 
+def test_build_copper_overlay_per_layer_cap():
+    # 레이어별 상한 — 한 층이 예산을 독식하지 않고 층마다 공평하게 잘린다.
+    em = {'layers': {
+        'A': {'nets': {f'n{i}': {'polygons': [
+            {'outer': [[0, 0], [1, 0], [1, 1]]}]} for i in range(6)}},
+        'B': {'nets': {f'm{i}': {'polygons': [
+            {'outer': [[0, 0], [1, 0], [1, 1]]}]} for i in range(6)}}}}
+    cop = build_copper_overlay(em, per_layer_max=4)
+    from collections import Counter
+    c = Counter(p['layer'] for p in cop['polys'])
+    assert c['A'] == 4 and c['B'] == 4         # 층마다 4개로 제한
+    assert cop['truncated'] is True
+    assert set(cop['truncated_layers']) == {'A', 'B'}
+
+
 def test_render_includes_copper_when_em_data():
     html_text = render_route_viewer(_eval_with_paths(), em_data=_em_data())
     assert 'drawCopper' in html_text
